@@ -1,15 +1,20 @@
 [submodule "lib/x265"]
 	path = lib/x265
 	url = https://bitbucket.org/multicoreware/x265_git.git
+
 [submodule "lib/svt-av1"]
 	path = lib/svt-av1
 	url = https://gitlab.com/AOMediaCodec/SVT-AV1
+
 [submodule "lib/jpegli"]
 	path = lib/jpegli
 	url = https://github.com/google/jpegli
+  recursive = true
+
 [submodule "lib/libjpeg-turbo"]
 	path = lib/libjpeg-turbo
 	url = https://github.com/libjpeg-turbo/libjpeg-turbo
+
 [submodule "lib/jxs"]
 	path = lib/jxs
 	url = https://github.com/TangKii/jxs
