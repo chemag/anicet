@@ -1,0 +1,18 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -134,7 +134,14 @@ if(X64)
+ endif(X64)
+
+ if(UNIX)
+-    list(APPEND PLATFORM_LIBS pthread)
++    # Use CMake's Threads abstraction instead of hardcoding pthread
++    # This works on Android (adds -pthread flag) and other Unix systems
++    set(CMAKE_THREAD_PREFER_PTHREAD ON)
++    set(THREADS_PREFER_PTHREAD_FLAG ON)
++    find_package(Threads REQUIRED)
++    if(CMAKE_THREAD_LIBS_INIT)
++        list(APPEND PLATFORM_LIBS ${CMAKE_THREAD_LIBS_INIT})
++    endif()
+     find_library(LIBRT rt)
+     if(LIBRT)
+         list(APPEND PLATFORM_LIBS rt)

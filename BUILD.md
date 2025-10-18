@@ -60,27 +60,29 @@ All encoder libraries are built as static binaries using CMake with the Android 
 1. x265 (HEVC/H.265)
 - Source: `lib/x265/source`
 - Build: `build/x265-build/`
-- Features: CLI enabled, high bit depth support
+- Features: CLI tool (x265), high bit depth support, assembly disabled for portability
+- Note: Patched to use CMake Threads abstraction instead of hardcoded pthread
 
 2. SVT-AV1 (AV1)
 - Source: `lib/svt-av1/`
 - Build: `build/svt-av1-build/`
-- Features: Encoder app, decoder disabled, testing disabled
+- Features: Encoder app (SvtAv1EncApp), full ARM SIMD support (NEON/SVE/SVE2)
 
 3. jpegli (JPEG)
 - Source: `lib/jpegli/`
 - Build: `build/jpegli-build/`
 - Features: Tools enabled, libjpeg API compatibility
+- Note: Requires nested submodules (Highway library, etc.)
 
 4. libjpeg-turbo (JPEG)
 - Source: `lib/libjpeg-turbo/`
 - Build: `build/libjpeg-turbo-build/`
-- Features: SIMD optimizations enabled
+- Features: Full NEON SIMD support, includes cjpeg/djpeg/jpegtran tools
 
 5. JXS (JPEG XS)
 - Source: `lib/jxs/`
 - Build: `build/jxs-build/`
-- Features: Static library build
+- Features: Library only (tools disabled due to portability issues)
 
 Each encoder is built as an ExternalProject to maintain isolation and allow independent configuration.
 
