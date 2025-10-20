@@ -28,16 +28,62 @@ from collections import OrderedDict
 # ARM64 SIMD extensions to check
 # Each entry: key is the output name, value is the regex pattern
 INSPECT_ARRAY = {
-    "neon": r"\s(fadd|fmul|ld1|st1|saddl|uaddl|sqadd|movi|add\s+v|sub\s+v|mul\s+v|ld[234]|st[234]|umull|smull)",
-    "dotprod": r"\s(sdot|udot)",
+    # 1. Core architecture and SIMD
+    "asimd": r"\s(fadd|fmul|ld1|st1|saddl|uaddl|sqadd|movi|add\s+v|sub\s+v|mul\s+v|ld[234]|st[234]|umull|smull)",
+    "asimdhp": r"\s(fadd\s+h|fmul\s+h|fmla\s+h|fabs\s+h|fneg\s+h|fsqrt\s+h)",
+    "asimdfhm": r"\s(fmlal|fmlsl)",
+    "asimddp": r"\s(sdot|udot)",
+    "asimdrdm": r"\s(sqrdmlah|sqrdmlsh)",
     "i8mm": r"\s(smmla|ummla|usmmla)",
-    "int8": r"\s(sqdmulh|sqrdmulh|sqshl|uqshl|sqshlu|srshr|urshr|sqrshrun|sqrshrn|uqrshrn)\.8",
-    "bf16": r"\s(bfdot|bfmmla|bfcvt|bfmlalb|bfmlalt)",
-    "sve_sve2": r"\sz[0-9]+\.",
-    "fp16": r"\s(fadd\s+h|fmul\s+h|fmla\s+h|fcvt.*h[0-9])",
-    "rdm": r"\s(sqrdmlah|sqrdmlsh)",
-    "crypto": r"\s(aese|aesd|aesmc|aesimc|sha1[cpmhsu]|sha256[hsu]|pmull)",
+    "bf16": r"\s(bfdot|bfmmla|bfcvt)",
+    "bf16fml": r"\s(bfmlalb|bfmlalt)",
+    "sve": r"\sz[0-9]+\.",
+    "sve2": r"\s(sqrdmlah\s+z|sqrdmlsh\s+z|match|nmatch|histcnt|histseg|addhnb|raddhnb)",
+    "svei8mm": r"\s(smmla\s+z|ummla\s+z|usmmla\s+z)",
+    "svebf16": r"\s(bfdot\s+z|bfmmla\s+z|bfcvt\s+z)",
+    "sveaes": r"\s(aesd\s+z|aese\s+z|aesimc\s+z|aesmc\s+z)",
+    "svepmull": r"\s(pmull\s+z)",
+    "svebitperm": r"\s(bext|bdep|bgrp)",
+    "svesha3": r"\s(rax1|bcax|eor3|xar)",
+    "svesm4": r"\s(sm4e\s+z|sm4ekey\s+z)",
+    "fphp": r"\s(fcvt\s+h|fadd\s+h|fmul\s+h|fdiv\s+h|fsub\s+h)",
+    "fcma": r"\s(fcmla|fcadd)",
+    "frint": r"\s(frint32x|frint64x|frint32z|frint64z)",
+
+    # 2. Cryptography and hash extensions
+    "aes": r"\s(aese|aesd|aesmc|aesimc)",
+    "pmull": r"\s(pmull)",
+    "sha1": r"\s(sha1[cpmhsu])",
+    "sha2": r"\s(sha256[hsu]|sha512[hsu])",
+    "sha3": r"\s(rax1|bcax|eor3|xar)",
+    "sha512": r"\s(sha512[hsu])",
+    "sm3": r"\s(sm3ss1|sm3tt[12][ab]|sm3partw[12])",
+    "sm4": r"\s(sm4e|sm4ekey)",
+
+    # 3. Memory, atomics, and synchronization
+    "atomics": r"\s(ldadd|ldclr|ldeor|ldset|ldsmax|ldsmin|ldumax|ldumin|cas|casp|swp)",
+    "dcpop": r"\sdc\s+cvap",
+    "dcpodp": r"\sdc\s+cvadp",
+    "uscat": r"\s(stset|stclr)",
+    "lrcpc": r"\s(ldapr|stlr)",
+    "ilrcpc": r"\s(ldapur|stlur)",
+    "dgh": r"\sdgh",
+    "sb": r"\ssb",
+    "wfxt": r"\s(wfet|wfit)",
+
+    # 4. Security and control-flow
+    "paca": r"\s(pacia|pacib|autia|autib)",
+    "pacg": r"\s(pacda|pacdb|pacga|autda|autdb|autga)",
+    "bti": r"\sbti",
+    "flagm": r"\s(setf8|setf16|rmif)",
+    "flagm2": r"\s(axflag|xaflag)",
+
+    # 5. Data conversion and integer extensions
+    "jscvt": r"\sfjcvtzs",
     "crc32": r"\scrc32[bhwxc]",
+    "dit": r"\smsr\s+dit",
+    "cpuid": r"\smrs\s+.*,\s*id_",
+    "evtstrm": r"\sevtstrm",
 }
 
 
