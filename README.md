@@ -1,7 +1,5 @@
 # ANICET: Android Native Image Codec Evaluation Tool
 
-# Overview
-
 Anicet is a lightweight C++ wrapper to measure resource utilization for binaries on Android. The goal is to use it to measure the complexity, size,and quality of image encoders in Android devices.
 
 Anicet is a wrapper around simpleperf and other tools. It includes CPU time and peak memory usage (VmHWM). The tool also report tags, sets CPU affinity, enforces timeouts, and outputs results in either CSV or JSON.
