@@ -46,6 +46,12 @@ if(ANDROID)
         set(ANDROID_PLATFORM "android-21")
     endif()
 
+    # Extract API level from ANDROID_PLATFORM (e.g., "android-21" -> "21")
+    string(REGEX REPLACE "android-" "" ANDROID_API_LEVEL "${ANDROID_PLATFORM}")
+
+    # Set ASM compiler flags for cross-compilation (needed for x265 assembly)
+    set(X265_ASM_FLAGS "-target aarch64-linux-android${ANDROID_API_LEVEL}")
+
     message(STATUS "Android ABI: ${ANDROID_ABI}")
     message(STATUS "Android Platform: ${ANDROID_PLATFORM}")
 endif()
@@ -84,11 +90,38 @@ endif()
 
 # Build encoder libraries as external projects
 if(BUILD_ENCODERS)
-    # x265 encoder
+    # x265 encoder - optimized version with assembly
     if(BUILD_X265)
         ExternalProject_Add(x265-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
             BINARY_DIR ${CMAKE_BINARY_DIR}/x265-build
+            # Apply pthread fix patch (idempotent - only applies once)
+            PATCH_COMMAND sh ${CMAKE_SOURCE_DIR}/patches/apply-x265-patch.sh
+                ${CMAKE_SOURCE_DIR}/lib/x265/source/.pthread-patched
+                ${CMAKE_SOURCE_DIR}/patches/x265-pthread-fix.patch
+                ${CMAKE_SOURCE_DIR}/lib/x265/source
+            COMMAND sh ${CMAKE_SOURCE_DIR}/patches/apply-x265-asm-patch.sh
+                ${CMAKE_SOURCE_DIR}/lib/x265/source/.asm-target-patched
+                ${CMAKE_SOURCE_DIR}/patches/x265-android-asm-target.patch
+                ${CMAKE_SOURCE_DIR}/lib/x265/source
+            CMAKE_CACHE_ARGS
+                ${ENCODER_CMAKE_CACHE_ARGS}
+                # Fix assembly compilation: add -target flag for Android cross-compilation
+                -DCMAKE_ASM_FLAGS:STRING=${X265_ASM_FLAGS}
+            CMAKE_ARGS
+                ${ENCODER_CMAKE_ARGS}
+                -DENABLE_SHARED=OFF
+                -DENABLE_CLI=ON
+                -DHIGH_BIT_DEPTH=ON
+                -DENABLE_ASSEMBLY=ON
+            BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+        )
+
+        # x265 encoder - non-optimized version (no assembly)
+        ExternalProject_Add(x265-lib-nonopt
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
+            BINARY_DIR ${CMAKE_BINARY_DIR}/x265-build-nonopt
             # Apply pthread fix patch (idempotent - only applies once)
             PATCH_COMMAND sh ${CMAKE_SOURCE_DIR}/patches/apply-x265-patch.sh
                 ${CMAKE_SOURCE_DIR}/lib/x265/source/.pthread-patched
@@ -101,9 +134,13 @@ if(BUILD_ENCODERS)
                 -DENABLE_SHARED=OFF
                 -DENABLE_CLI=ON
                 -DHIGH_BIT_DEPTH=ON
-                -DENABLE_ASSEMBLY=ON
+                -DENABLE_ASSEMBLY=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            # Install and rename binary to x265-nonopt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            COMMAND ${CMAKE_COMMAND} -E rename
+                ${ANICET_INSTALL_DIR}/bin/x265
+                ${ANICET_INSTALL_DIR}/bin/x265-nonopt
         )
     endif()
 
@@ -151,7 +188,7 @@ if(BUILD_ENCODERS)
         )
     endif()
 
-    # libjpeg-turbo encoder
+    # libjpeg-turbo encoder - optimized version with SIMD
     if(BUILD_LIBJPEG_TURBO)
         ExternalProject_Add(libjpeg-turbo-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libjpeg-turbo
@@ -165,6 +202,28 @@ if(BUILD_ENCODERS)
                 -DWITH_SIMD=ON
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+        )
+
+        # libjpeg-turbo encoder - non-optimized version (no SIMD)
+        ExternalProject_Add(libjpeg-turbo-lib-nonopt
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libjpeg-turbo
+            BINARY_DIR ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-nonopt
+            CMAKE_CACHE_ARGS
+                ${ENCODER_CMAKE_CACHE_ARGS}
+            CMAKE_ARGS
+                ${ENCODER_CMAKE_ARGS}
+                -DENABLE_SHARED=OFF
+                -DENABLE_STATIC=ON
+                -DWITH_SIMD=OFF
+            BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            # Install and rename binaries to *-nonopt
+            INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            COMMAND ${CMAKE_COMMAND} -E rename
+                ${ANICET_INSTALL_DIR}/bin/cjpeg
+                ${ANICET_INSTALL_DIR}/bin/cjpeg-nonopt
+            COMMAND ${CMAKE_COMMAND} -E rename
+                ${ANICET_INSTALL_DIR}/bin/djpeg
+                ${ANICET_INSTALL_DIR}/bin/djpeg-nonopt
         )
     endif()
 
@@ -221,7 +280,7 @@ message(STATUS "==============================================")
 if(BUILD_ENCODERS)
     set(ENCODER_TARGETS "")
     if(BUILD_X265)
-        list(APPEND ENCODER_TARGETS x265-lib)
+        list(APPEND ENCODER_TARGETS x265-lib x265-lib-nonopt)
     endif()
     if(BUILD_SVT_AV1)
         list(APPEND ENCODER_TARGETS svt-av1-lib)
@@ -230,7 +289,7 @@ if(BUILD_ENCODERS)
         list(APPEND ENCODER_TARGETS jpegli-lib)
     endif()
     if(BUILD_LIBJPEG_TURBO)
-        list(APPEND ENCODER_TARGETS libjpeg-turbo-lib)
+        list(APPEND ENCODER_TARGETS libjpeg-turbo-lib libjpeg-turbo-lib-nonopt)
     endif()
     if(BUILD_JXS)
         list(APPEND ENCODER_TARGETS jxs-lib)

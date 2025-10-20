@@ -1,0 +1,13 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -454,6 +454,11 @@ elseif(ARM OR ARM64 OR CROSS_COMPILE_ARM OR RISCV)
+         check_cxx_compiler_flag(-flax-vector-conversions=none CC_HAS_FLAX_VEC_CONV_NONE)
+         if(CC_HAS_FLAX_VEC_CONV_NONE)
+             set(ARM_ARGS ${ARM_ARGS} -flax-vector-conversions=none)
++        endif()
++        # Fix Android cross-compilation: add -target flag for assembly compilation
++        if(ANDROID AND CMAKE_ASM_FLAGS)
++            separate_arguments(ASM_FLAGS_LIST UNIX_COMMAND "${CMAKE_ASM_FLAGS}")
++            set(ARM_ARGS ${ARM_ARGS} ${ASM_FLAGS_LIST})
+         endif()
+     endif()
