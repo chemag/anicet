@@ -245,10 +245,12 @@ if(BUILD_ENCODERS)
             # Build everything including CLI tools
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
             # Install library and manually copy CLI tools (no install rules for them)
-            INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_BINARY_DIR}/jxs-build/bin/jxs_encoder
+                ${ANICET_INSTALL_DIR}/bin/jxs_encoder
+            COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_BINARY_DIR}/jxs-build/bin/jxs_decoder
-                ${ANICET_INSTALL_DIR}/bin/
+                ${ANICET_INSTALL_DIR}/bin/jxs_decoder
         )
     endif()
 
@@ -326,13 +328,18 @@ else()
     message(STATUS "Target Platform: Host (${CMAKE_SYSTEM_NAME})")
 endif()
 message(STATUS "----------------------------------------------")
-message(STATUS "Encoder Libraries:")
-message(STATUS "  x265:          ${BUILD_X265}")
-message(STATUS "  SVT-AV1:       ${BUILD_SVT_AV1}")
-message(STATUS "  jpegli:        ${BUILD_JPEGLI}")
-message(STATUS "  libjpeg-turbo: ${BUILD_LIBJPEG_TURBO}")
-message(STATUS "  JXS:           ${BUILD_JXS}")
-message(STATUS "  libwebp:       ${BUILD_LIBWEBP}")
+message(STATUS "Encoder Binaries:")
+message(STATUS "  x265:            ${BUILD_X265}")
+message(STATUS "  SVT-AV1:         ${BUILD_SVT_AV1}")
+message(STATUS "  jpegli:          ${BUILD_JPEGLI}")
+message(STATUS "  libjpeg-turbo:   ${BUILD_LIBJPEG_TURBO}")
+message(STATUS "  JXS:             ${BUILD_JXS}")
+message(STATUS "  libwebp:         ${BUILD_LIBWEBP}")
+if(ANDROID)
+    message(STATUS "  android-mediacodec: ON (hardware encoders)")
+else()
+    message(STATUS "  android-mediacodec: OFF (Android only)")
+endif()
 message(STATUS "==============================================")
 
 # Custom target to build all encoders
