@@ -171,33 +171,34 @@ static std::map<std::string, long> parse_simpleperf_output(
 struct Options {
   std::vector<std::string> cmd;
   std::vector<std::pair<std::string, std::string>> tags;
-  std::string cpus;              // e.g. "4-7"
-  int nice = 0;                  // 0 means unchanged
-  int timeout_ms = 0;            // 0 means no timeout
-  bool json = false;             // default CSV
-  bool add_simpleperf = false;   // wrap command with simpleperf
+  std::string cpus;                     // e.g. "4-7"
+  int nice = 0;                         // 0 means unchanged
+  int timeout_ms = 0;                   // 0 means no timeout
+  bool json = false;                    // default CSV
+  bool add_simpleperf = false;          // wrap command with simpleperf
   std::string simpleperf_cmd = "stat";  // simpleperf subcommand
-  std::string simpleperf_events;  // comma-separated event list
+  std::string simpleperf_events;        // comma-separated event list
 };
 
 static void print_help(const char* argv0) {
-  fprintf(stderr,
-          "Usage:\n"
-          "  %s [options] -- <command> [args...]\n\n"
-          "Options:\n"
-          "  --tag key=val            Repeatable; attach metadata to output row\n"
-          "  --cpus LIST              CPU affinity, e.g. 0,2,4-5\n"
-          "  --nice N                 Set niceness [-20..19]; requires privileges "
-          "for negative\n"
-          "  --timeout-ms N           Kill child if it runs longer than N ms\n"
-          "  --json                   Emit JSON (default: CSV)\n"
-          "  --add-simpleperf         Wrap command with simpleperf\n"
-          "  --simpleperf-command CMD Simpleperf subcommand (default: stat)\n"
-          "  --simpleperf-events LIST Comma-separated perf events\n"
-          "  -h, --help               Show help\n\n"
-          "Outputs fields:\n"
-          "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
-          argv0);
+  fprintf(
+      stderr,
+      "Usage:\n"
+      "  %s [options] -- <command> [args...]\n\n"
+      "Options:\n"
+      "  --tag key=val            Repeatable; attach metadata to output row\n"
+      "  --cpus LIST              CPU affinity, e.g. 0,2,4-5\n"
+      "  --nice N                 Set niceness [-20..19]; requires privileges "
+      "for negative\n"
+      "  --timeout-ms N           Kill child if it runs longer than N ms\n"
+      "  --json                   Emit JSON (default: CSV)\n"
+      "  --add-simpleperf         Wrap command with simpleperf\n"
+      "  --simpleperf-command CMD Simpleperf subcommand (default: stat)\n"
+      "  --simpleperf-events LIST Comma-separated perf events\n"
+      "  -h, --help               Show help\n\n"
+      "Outputs fields:\n"
+      "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
+      argv0);
 }
 
 static bool starts_with(const char* s, const char* pfx) {
@@ -359,7 +360,8 @@ int main(int argc, char** argv) {
     std::vector<char*> av;
 
     if (opt.add_simpleperf) {
-      // Wrap with simpleperf: simpleperf <cmd> -e <events> -o <out> -- <original cmd>
+      // Wrap with simpleperf: simpleperf <cmd> -e <events> -o <out> --
+      // <original cmd>
       cmd_vec.push_back("simpleperf");
       cmd_vec.push_back(opt.simpleperf_cmd);
       if (!opt.simpleperf_events.empty()) {
@@ -503,8 +505,8 @@ int main(int argc, char** argv) {
       first = false;
     }
     if (first) printf("run=na");  // no tags
-    printf(",wall_ms=%ld,user_ms=%ld,sys_ms=%ld,vmhwm_kb=%ld,exit=%d",
-           wall_ms, user_ms, sys_ms, vmhwm_kb, exit_code);
+    printf(",wall_ms=%ld,user_ms=%ld,sys_ms=%ld,vmhwm_kb=%ld,exit=%d", wall_ms,
+           user_ms, sys_ms, vmhwm_kb, exit_code);
     // Add simpleperf metrics
     for (const auto& metric : simpleperf_metrics) {
       printf(",%s=%ld", metric.first.c_str(), metric.second);
