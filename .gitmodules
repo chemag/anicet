@@ -18,3 +18,7 @@
 [submodule "lib/jxs"]
 	path = lib/jxs
 	url = https://github.com/TangKii/jxs
+
+[submodule "lib/libwebp"]
+	path = lib/libwebp
+	url = https://chromium.googlesource.com/webm/libwebp

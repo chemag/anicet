@@ -7,6 +7,7 @@ Summary:
 * SVT-AV1 has the most advanced SIMD optimizations (DOTPROD, I8MM, SVE). Optimizations can be controlled in runtime.
 * Google's jpegli uses SVE via the Google Highway library. Optimizations can be controlled in runtime.
 * libjpeg-turbo uses compile-time, hand-written baseline NEON.
+* libwebp uses compile-time, hand-written baseline NEON.
 * jxs has no optimizations: There is some NEON code from compiler auto-vectorization (compiler converts plain C loops to NEON).
 
 
@@ -103,19 +104,22 @@ NEON optimizations are used for color space conversion, downsampling/upsampling,
 NEON optimizations are included at compule time, and controlled using the CMake `WITH_SIMD=ON` setting.
 
 
-# 6. JXS (JPEG XS)
+# 6. libwebp
+
+libwebp contains extensive hand-written SIMD assembly, supporting 3 major families of CPU optimizations:
+* (1) x86: libwebp has some SSE, SSE4.1, and AVX2 files.
+* (2) MIPS: libwebp has some MIPS32, MIPS DSP R2, and some MSA (MIPS SIMD Architecture) code.
+* (3) ARM: Uses NEON (aka AArch64 NEON aka ASIMD). Code is located in `src/dsp/`.
+
+Optimizations are written in GNU-style ARM assembler, and get used based on `ENABLE_ASSEMBLY` variable. Note that the ARM/AArch64 optimizations are included at compile time (the x86 optimizations are runtime detected).
+
+
+# 7. JXS (JPEG XS)
 
 JXS is the JPEG XS (ISO/IEC 21122) reference encoder/decoder. It is implemented in pure C with no SIMD optimizations. This is an intentional design choice aligned with JPEG XS's design philosophy: low-latency, low-complexity image codec (at the cost of low compression ratios).
 
 
-Highway reads ARM64 CPU features via:
-- Linux: `getauxval(AT_HWCAP)` and `AT_HWCAP2`
-- Android: Same mechanism (reads `/proc/cpuinfo` as fallback)
-
-
-# 7. Discussion
-
-
+# 8. Discussion
 
 | Encoder       | SIMD Use                      | ARM64 extensions              | Operation    |
 |---------------|-------------------------------|-------------------------------|--------------|
@@ -123,4 +127,5 @@ Highway reads ARM64 CPU features via:
 | SVT-AV1       | C intrinsics                  | NEON, DOTPROD, I8MM, SVE/SVE2 | runtime      |
 | jpegli        | Highway library               | NEON, DOTPROD, SVE, SVE2      | runtime      |
 | libjpeg-turbo | Hand-written assembly         | NEON                          | compile-time |
+| libwebp       | Hand-written assembly         | NEON                          | compile-time |
 | JXS           | Implicit (auto-vectorization) | none                          | none         |

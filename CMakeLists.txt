@@ -63,6 +63,7 @@ option(BUILD_SVT_AV1 "Build SVT-AV1 encoder" ON)
 option(BUILD_JPEGLI "Build jpegli encoder" ON)
 option(BUILD_LIBJPEG_TURBO "Build libjpeg-turbo encoder" ON)
 option(BUILD_JXS "Build JXS encoder" ON)
+option(BUILD_LIBWEBP "Build libwebp encoder" ON)
 
 # Installation directory
 set(ANICET_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}" CACHE PATH "Installation directory")
@@ -250,6 +251,63 @@ if(BUILD_ENCODERS)
                 ${ANICET_INSTALL_DIR}/bin/
         )
     endif()
+
+    # libwebp encoder - optimized version with SIMD
+    if(BUILD_LIBWEBP)
+        ExternalProject_Add(libwebp-lib
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libwebp
+            BINARY_DIR ${CMAKE_BINARY_DIR}/libwebp-build
+            CMAKE_CACHE_ARGS
+                ${ENCODER_CMAKE_CACHE_ARGS}
+            CMAKE_ARGS
+                ${ENCODER_CMAKE_ARGS}
+                -DBUILD_SHARED_LIBS=OFF
+                -DWEBP_BUILD_CWEBP=ON
+                -DWEBP_BUILD_DWEBP=ON
+                -DWEBP_ENABLE_SIMD=ON
+                -DWEBP_BUILD_ANIM_UTILS=OFF
+                -DWEBP_BUILD_GIF2WEBP=OFF
+                -DWEBP_BUILD_IMG2WEBP=OFF
+                -DWEBP_BUILD_VWEBP=OFF
+                -DWEBP_BUILD_WEBPINFO=OFF
+                -DWEBP_BUILD_LIBWEBPMUX=OFF
+                -DWEBP_BUILD_WEBPMUX=OFF
+                -DWEBP_BUILD_EXTRAS=OFF
+            BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+        )
+
+        # libwebp encoder - non-optimized version (no SIMD)
+        ExternalProject_Add(libwebp-lib-nonopt
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libwebp
+            BINARY_DIR ${CMAKE_BINARY_DIR}/libwebp-build-nonopt
+            CMAKE_CACHE_ARGS
+                ${ENCODER_CMAKE_CACHE_ARGS}
+            CMAKE_ARGS
+                ${ENCODER_CMAKE_ARGS}
+                -DBUILD_SHARED_LIBS=OFF
+                -DWEBP_BUILD_CWEBP=ON
+                -DWEBP_BUILD_DWEBP=ON
+                -DWEBP_ENABLE_SIMD=OFF
+                -DWEBP_BUILD_ANIM_UTILS=OFF
+                -DWEBP_BUILD_GIF2WEBP=OFF
+                -DWEBP_BUILD_IMG2WEBP=OFF
+                -DWEBP_BUILD_VWEBP=OFF
+                -DWEBP_BUILD_WEBPINFO=OFF
+                -DWEBP_BUILD_LIBWEBPMUX=OFF
+                -DWEBP_BUILD_WEBPMUX=OFF
+                -DWEBP_BUILD_EXTRAS=OFF
+            BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            # Install and rename binaries to *-nonopt
+            INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            COMMAND ${CMAKE_COMMAND} -E rename
+                ${ANICET_INSTALL_DIR}/bin/cwebp
+                ${ANICET_INSTALL_DIR}/bin/cwebp-nonopt
+            COMMAND ${CMAKE_COMMAND} -E rename
+                ${ANICET_INSTALL_DIR}/bin/dwebp
+                ${ANICET_INSTALL_DIR}/bin/dwebp-nonopt
+        )
+    endif()
 endif()
 
 # Add anicet wrapper
@@ -274,6 +332,7 @@ message(STATUS "  SVT-AV1:       ${BUILD_SVT_AV1}")
 message(STATUS "  jpegli:        ${BUILD_JPEGLI}")
 message(STATUS "  libjpeg-turbo: ${BUILD_LIBJPEG_TURBO}")
 message(STATUS "  JXS:           ${BUILD_JXS}")
+message(STATUS "  libwebp:       ${BUILD_LIBWEBP}")
 message(STATUS "==============================================")
 
 # Custom target to build all encoders
@@ -293,6 +352,9 @@ if(BUILD_ENCODERS)
     endif()
     if(BUILD_JXS)
         list(APPEND ENCODER_TARGETS jxs-lib)
+    endif()
+    if(BUILD_LIBWEBP)
+        list(APPEND ENCODER_TARGETS libwebp-lib libwebp-lib-nonopt)
     endif()
 
     add_custom_target(encoders
