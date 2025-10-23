@@ -812,7 +812,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
 }
 
 // Android MediaCodec encoder - wrapper that adapts
-// android_mediacodec_encode_frame()
+// android_mediacodec_encode_frame_full()
 int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           const char* codec_name, uint8_t* output_buffer,
@@ -836,11 +836,11 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   format.frame_count = 1;
   format.debug_level = 0;  // Quiet
 
-  // android_mediacodec_encode_frame allocates its own buffer
+  // android_mediacodec_encode_frame_full allocates its own buffer
   uint8_t* mediacodec_buffer = nullptr;
   size_t mediacodec_size = 0;
 
-  int ret = android_mediacodec_encode_frame(
+  int ret = android_mediacodec_encode_frame_full(
       input_buffer, input_size, &format, &mediacodec_buffer, &mediacodec_size);
   if (ret != 0) {
     return ret;

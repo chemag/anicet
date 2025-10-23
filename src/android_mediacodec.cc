@@ -504,7 +504,7 @@ static int encode_frames(const Options& opt) {
   DEBUG(1, "Input file read successfully (%zu bytes)", read_size);
 
   // 2. Call library function to encode
-  DEBUG(1, "Calling android_mediacodec_encode_frame()...");
+  DEBUG(1, "Calling android_mediacodec_encode_frame_full()...");
 
   // Prepare format configuration
   MediaCodecFormat format;
@@ -519,8 +519,8 @@ static int encode_frames(const Options& opt) {
 
   uint8_t* output_buffer = nullptr;
   size_t output_size = 0;
-  int result = android_mediacodec_encode_frame(input_buffer, read_size, &format,
-                                               &output_buffer, &output_size);
+  int result = android_mediacodec_encode_frame_full(
+      input_buffer, read_size, &format, &output_buffer, &output_size);
 
   // Free input buffer
   free(input_buffer);

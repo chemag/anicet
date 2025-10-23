@@ -192,15 +192,12 @@ static void set_amediaformat(AMediaFormat* format, const char* mime_type,
 
 #ifdef __ANDROID__
 
-// Public API: Encode frames using MediaCodec
-int android_mediacodec_encode_frame(const uint8_t* input_buffer,
-                                    size_t input_size,
-                                    const MediaCodecFormat* fmt,
-                                    uint8_t** output_buffer,
-                                    size_t* output_size) {
-  // Initialize output to NULL/0
-  *output_buffer = nullptr;
-  *output_size = 0;
+// Context structure for MediaCodec encoder
+// Setup MediaCodec encoder
+int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
+                                    AMediaCodec** codec_out) {
+  // Initialize output parameter
+  *codec_out = nullptr;
 
   // Set global debug level for this encoding session
   g_debug_level = fmt->debug_level;
@@ -282,27 +279,43 @@ int android_mediacodec_encode_frame(const uint8_t* input_buffer,
   }
   DEBUG(1, "Codec started successfully");
 
-  // 5. calculate frame size
+  *codec_out = codec;
+  return 0;
+}
+
+// Encode frames using pre-configured MediaCodec encoder
+int android_mediacodec_encode_frame(
+    AMediaCodec* codec, const uint8_t* input_buffer, size_t input_size,
+    const MediaCodecFormat* fmt, uint8_t** output_buffer, size_t* output_size) {
+  // Initialize output to NULL/0
+  *output_buffer = nullptr;
+  *output_size = 0;
+
+  // Set debug level for this encoding session
+  g_debug_level = fmt->debug_level;
+
+  // Calculate frame size
+  std::string color_format_str(fmt->color_format);
   size_t frame_size = get_frame_size(color_format_str, fmt->width, fmt->height);
+
+  // Validate input size
   if (input_size < frame_size) {
     fprintf(stderr,
             "Error: Input buffer too small (got %zu, need %zu for one frame)\n",
             input_size, frame_size);
-    AMediaCodec_delete(codec);
     return 4;
   }
 
-  // 6. allocate output buffer (estimate: input_size * 2 should be enough)
+  // Allocate output buffer (estimate: input_size * 2 should be enough)
   size_t output_capacity = input_size * 2;
   uint8_t* out_buffer = (uint8_t*)malloc(output_capacity);
   if (!out_buffer) {
     fprintf(stderr, "Error: Cannot allocate output buffer\n");
-    AMediaCodec_delete(codec);
     return 5;
   }
   size_t out_size = 0;
 
-  // 7. encoding loop
+  // Encoding loop
   AMediaCodecBufferInfo info;
   int frames_sent = 0;
   int frames_recv = 0;
@@ -313,7 +326,7 @@ int android_mediacodec_encode_frame(const uint8_t* input_buffer,
 
   while (!output_eos_recv) {
     if (!input_eos_sent) {
-      // 7.1. get (dequeue) input buffer(s)
+      // Get (dequeue) input buffer(s)
       ssize_t input_buffer_index =
           AMediaCodec_dequeueInputBuffer(codec, timeout_us);
 
@@ -362,7 +375,7 @@ int android_mediacodec_encode_frame(const uint8_t* input_buffer,
       }
     }
 
-    // 7.2. get (dequeue) an output buffer
+    // Get (dequeue) an output buffer
     ssize_t output_buffer_index =
         AMediaCodec_dequeueOutputBuffer(codec, &info, timeout_us);
 
@@ -417,7 +430,6 @@ int android_mediacodec_encode_frame(const uint8_t* input_buffer,
           if (!new_buffer) {
             fprintf(stderr, "Error: Cannot grow output buffer\n");
             free(out_buffer);
-            AMediaCodec_delete(codec);
             return 6;
           }
           out_buffer = new_buffer;
@@ -446,38 +458,103 @@ int android_mediacodec_encode_frame(const uint8_t* input_buffer,
 
   DEBUG(1, "Encoded %d frames, received %d frames", frames_sent, frames_recv);
 
-  // 8. clean up
+  // Return result via output parameters
+  *output_buffer = out_buffer;
+  *output_size = out_size;
+  return 0;  // Success
+}
+
+// Cleanup MediaCodec encoder and free resources
+void android_mediacodec_encode_cleanup(AMediaCodec* codec, int debug_level) {
+  if (!codec) {
+    return;
+  }
+
+  // Set debug level for cleanup
+  g_debug_level = debug_level;
+
+  // Stop and delete codec
   // NOTE: Do NOT call flush() here - it's for reset/reuse, not cleanup
   // After EOS is sent/received, go straight to stop then delete
   DEBUG(2, "Stopping codec...");
   AMediaCodec_stop(codec);
   DEBUG(2, "Deleting codec...");
   AMediaCodec_delete(codec);
+
   // Stop binder thread AFTER codec is deleted
   // (codec deletion needs binder thread for cleanup messages)
   stop_binder_thread_pool();
+}
 
-  // 9. return result via output parameters
-  *output_buffer = out_buffer;
-  *output_size = out_size;
-  return 0;  // Success
+// Full all-in-one encode function (convenience wrapper)
+int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
+                                         size_t input_size,
+                                         const MediaCodecFormat* format,
+                                         uint8_t** output_buffer,
+                                         size_t* output_size) {
+  // Setup
+  AMediaCodec* codec = nullptr;
+  int setup_result = android_mediacodec_encode_setup(format, &codec);
+  if (setup_result != 0) {
+    return setup_result;
+  }
+
+  // Encode
+  int result = android_mediacodec_encode_frame(
+      codec, input_buffer, input_size, format, output_buffer, output_size);
+
+  // Cleanup
+  android_mediacodec_encode_cleanup(codec, format->debug_level);
+
+  return result;
 }
 
 #else  // !__ANDROID__
 
-// Stub implementation for non-Android platforms
-int android_mediacodec_encode_frame(const uint8_t* input_buffer,
+// Stub implementations for non-Android platforms
+
+// Forward declaration for stub
+struct AMediaCodec;
+
+int android_mediacodec_encode_setup(const MediaCodecFormat* format,
+                                    AMediaCodec** codec) {
+  (void)format;
+  *codec = nullptr;
+  fprintf(stderr, "Error: MediaCodec encoding only works on Android\n");
+  return 1;
+}
+
+int android_mediacodec_encode_frame(AMediaCodec* codec,
+                                    const uint8_t* input_buffer,
                                     size_t input_size,
-                                    const MediaCodecFormat* fmt,
+                                    const MediaCodecFormat* format,
                                     uint8_t** output_buffer,
                                     size_t* output_size) {
+  (void)codec;
   (void)input_buffer;
   (void)input_size;
-  (void)fmt;
-
+  (void)format;
   *output_buffer = nullptr;
   *output_size = 0;
+  fprintf(stderr, "Error: MediaCodec encoding only works on Android\n");
+  return 1;
+}
 
+void android_mediacodec_encode_cleanup(AMediaCodec* codec, int debug_level) {
+  (void)codec;
+  (void)debug_level;
+}
+
+int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
+                                         size_t input_size,
+                                         const MediaCodecFormat* format,
+                                         uint8_t** output_buffer,
+                                         size_t* output_size) {
+  (void)input_buffer;
+  (void)input_size;
+  (void)format;
+  *output_buffer = nullptr;
+  *output_size = 0;
   fprintf(stderr, "Error: MediaCodec encoding only works on Android\n");
   return 1;
 }
