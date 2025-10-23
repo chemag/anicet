@@ -45,6 +45,14 @@ int android_mediacodec_get_color_format(const char* color_format);
 // Calculate bitrate from quality (0-100) and frame dimensions
 int android_mediacodec_calculate_bitrate(int quality, int width, int height);
 
+// Configure AMediaFormat with encoding parameters
+// Forward declaration for AMediaFormat (defined in Android NDK)
+struct AMediaFormat;
+void android_mediacodec_set_format(struct AMediaFormat* format,
+                                   const char* mime_type, int width, int height,
+                                   const char* color_format, int* bitrate,
+                                   int quality);
+
 // MediaCodec encoding format configuration
 typedef struct {
   int width;                 // Frame width in pixels

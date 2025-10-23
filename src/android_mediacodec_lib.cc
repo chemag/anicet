@@ -146,11 +146,13 @@ static int calculate_bitrate(int quality, int width, int height) {
 // Note: android_mediacodec_cleanup_binder() is implemented in
 // android_binder_init.h
 
-// Helper: Configure AMediaFormat with encoding parameters
-static void set_amediaformat(AMediaFormat* format, const char* mime_type,
-                             int width, int height,
-                             const std::string& color_format, int* bitrate,
-                             int quality) {
+// Public helper: Configure AMediaFormat with encoding parameters
+void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
+                                   int width, int height,
+                                   const char* color_format, int* bitrate,
+                                   int quality) {
+  std::string color_format_str(color_format);
+  int32_t color_fmt = get_color_format(color_format_str);
   // Set basic parameters
   AMediaFormat_setString(format, "mime", mime_type);
   DEBUG(2, "AMediaFormat_setString(format, \"mime\", \"%s\");", mime_type);
@@ -161,8 +163,7 @@ static void set_amediaformat(AMediaFormat* format, const char* mime_type,
   AMediaFormat_setInt32(format, "height", height);
   DEBUG(2, "AMediaFormat_setInt32(format, \"height\", %d);", height);
 
-  int32_t color_fmt = get_color_format(color_format);
-  DEBUG(1, "Setting color-format to %d (%s)", color_fmt, color_format.c_str());
+  DEBUG(1, "Setting color-format to %d (%s)", color_fmt, color_format);
   AMediaFormat_setInt32(format, "color-format", color_fmt);
   DEBUG(2, "AMediaFormat_setInt32(format, \"color-format\", %d);", color_fmt);
 
@@ -243,10 +244,10 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
   // create format
   AMediaFormat* format = AMediaFormat_new();
   int bitrate_local =
-      fmt->bitrate;  // Make local copy since set_amediaformat may modify
-  std::string color_format_str(fmt->color_format);
-  set_amediaformat(format, mime_type, fmt->width, fmt->height, color_format_str,
-                   &bitrate_local, fmt->quality);
+      fmt->bitrate;  // Make local copy since function may modify
+  android_mediacodec_set_format(format, mime_type, fmt->width, fmt->height,
+                                fmt->color_format, &bitrate_local,
+                                fmt->quality);
   DEBUG(1, "Encoding with: %s", fmt->codec_name);
   DEBUG(1, "MIME type: %s", mime_type);
   DEBUG(1, "resolution: %dx%d bitrate: %d frames: %d", fmt->width, fmt->height,
@@ -576,6 +577,20 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 void android_mediacodec_encode_cleanup(AMediaCodec* codec, int debug_level) {
   (void)codec;
   (void)debug_level;
+  // Stub - nothing to do on non-Android platforms
+}
+
+void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
+                                   int width, int height,
+                                   const char* color_format, int* bitrate,
+                                   int quality) {
+  (void)format;
+  (void)mime_type;
+  (void)width;
+  (void)height;
+  (void)color_format;
+  (void)bitrate;
+  (void)quality;
   // Stub - nothing to do on non-Android platforms
 }
 
