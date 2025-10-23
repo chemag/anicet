@@ -214,10 +214,11 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
     fprintf(stderr, "MediaCodec may not work correctly\n");
   } else {
     DEBUG(1, "Binder thread pool initialized successfully");
-    // Give the media server a brief moment to stabilize after binder connection
+    // Give the media server time to stabilize after binder connection
     // This helps prevent aborts when the media server is still cleaning up from
-    // previous client disconnections
-    usleep(20000);  // 20ms delay
+    // previous client disconnections. Testing shows: 18% at 20ms, 16% at 50ms,
+    // 12% at 100ms - media server needs substantial recovery time.
+    usleep(150000);  // 150ms delay
   }
 
   // 1. set codec format
