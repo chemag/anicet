@@ -2,7 +2,7 @@
 
 Anicet is a lightweight C++ wrapper to measure resource utilization for binaries on Android. The goal is to use it to measure the complexity, size, and quality of image encoders in Android devices.
 
-The suite includes both software encoders (x265, SVT-AV1, libjpeg-turbo, jpegli, JXS, libwebp) and a hardware encoder wrapper (android-mediacodec) for testing device-specific hardware accelerators.
+The suite includes both software encoders (x265, SVT-AV1, libjpeg-turbo, jpegli, JXS, libwebp) and a hardware encoder wrapper (android_mediacodec) for testing device-specific hardware accelerators.
 
 Anicet is a wrapper around simpleperf and other tools. It includes CPU time and peak memory usage (VmHWM). The tool also report tags, sets CPU affinity, enforces timeouts, and outputs results in either CSV or JSON.
 
@@ -46,24 +46,24 @@ done | awk -F, '
   }' >> $OUT
 ```
 
-Swap the encoder command with equivalents for **x265**, **cjpegli**, **jxs**, **cwebp**, and **android-mediacodec**.
+Swap the encoder command with equivalents for **x265**, **cjpegli**, **jxs**, **cwebp**, and **android_mediacodec**.
 
 To output JSON instead of CSV, add `--json`.
 
 
 ## Testing Hardware Encoders with MediaCodec
 
-The `android-mediacodec` tool allows testing device-specific hardware encoders (like HEIC):
+The `android_mediacodec` tool allows testing device-specific hardware encoders (like HEIC):
 
 ```bash
 # List all available encoders on the device
-adb shell /data/local/tmp/android-mediacodec --list-codecs
+adb shell /data/local/tmp/android_mediacodec --list-codecs
 
 # List only image/video encoders (HEVC, HEIC, AVC, H264, VP9, AV1)
-adb shell /data/local/tmp/android-mediacodec --list-image-codecs
+adb shell /data/local/tmp/android_mediacodec --list-image-codecs
 
 # Encode a single frame with hardware HEVC encoder (image mode)
-adb shell /data/local/tmp/android-mediacodec \
+adb shell /data/local/tmp/android_mediacodec \
   --codec-name c2.exynos.hevc.encoder \
   --input /sdcard/input_4k.yuv \
   --output /sdcard/output.hevc \
@@ -75,13 +75,13 @@ adb shell /data/local/tmp/android-mediacodec \
 adb shell /data/local/tmp/anicet \
   --tag encoder=hevc_hw --tag quality=90 --tag resolution=4k \
   --cpus 4-7 --timeout-ms 60000 \
-  -- /data/local/tmp/android-mediacodec \
+  -- /data/local/tmp/android_mediacodec \
      --codec-name c2.exynos.hevc.encoder \
      --input /sdcard/test_4k.yuv --output /sdcard/out.hevc \
      --width 3840 --height 2160 --quality 90
 
 # Encode video with hardware HEVC encoder
-adb shell /data/local/tmp/android-mediacodec \
+adb shell /data/local/tmp/android_mediacodec \
   --codec-name c2.exynos.hevc.encoder \
   --input /sdcard/video.yuv \
   --output /sdcard/video.hevc \

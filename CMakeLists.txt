@@ -93,6 +93,14 @@ endif()
 if(BUILD_ENCODERS)
     # x265 encoder - optimized version with assembly
     if(BUILD_X265)
+        # Check if x265 source exists
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/x265/source/CMakeLists.txt")
+            message(STATUS "x265 source not found - skipping x265 build (run: git submodule update --init)")
+            set(BUILD_X265 OFF)
+        endif()
+    endif()
+
+    if(BUILD_X265)
         ExternalProject_Add(x265-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
             BINARY_DIR ${CMAKE_BINARY_DIR}/x265-build
@@ -147,6 +155,14 @@ if(BUILD_ENCODERS)
 
     # SVT-AV1 encoder
     if(BUILD_SVT_AV1)
+        # Check if svt-av1 source exists
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/svt-av1/CMakeLists.txt")
+            message(STATUS "SVT-AV1 source not found - skipping SVT-AV1 build (run: git submodule update --init)")
+            set(BUILD_SVT_AV1 OFF)
+        endif()
+    endif()
+
+    if(BUILD_SVT_AV1)
         ExternalProject_Add(svt-av1-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/svt-av1
             BINARY_DIR ${CMAKE_BINARY_DIR}/svt-av1-build
@@ -166,6 +182,14 @@ if(BUILD_ENCODERS)
     endif()
 
     # jpegli encoder
+    if(BUILD_JPEGLI)
+        # Check if jpegli source exists
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/jpegli/CMakeLists.txt")
+            message(STATUS "jpegli source not found - skipping jpegli build (run: git submodule update --init)")
+            set(BUILD_JPEGLI OFF)
+        endif()
+    endif()
+
     if(BUILD_JPEGLI)
         ExternalProject_Add(jpegli-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/jpegli
@@ -190,6 +214,14 @@ if(BUILD_ENCODERS)
     endif()
 
     # libjpeg-turbo encoder - optimized version with SIMD
+    if(BUILD_LIBJPEG_TURBO)
+        # Check if libjpeg-turbo source exists
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/libjpeg-turbo/CMakeLists.txt")
+            message(STATUS "libjpeg-turbo source not found - skipping libjpeg-turbo build (run: git submodule update --init)")
+            set(BUILD_LIBJPEG_TURBO OFF)
+        endif()
+    endif()
+
     if(BUILD_LIBJPEG_TURBO)
         ExternalProject_Add(libjpeg-turbo-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libjpeg-turbo
@@ -230,6 +262,14 @@ if(BUILD_ENCODERS)
 
     # JXS encoder
     if(BUILD_JXS)
+        # Check if JXS source exists
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/jxs/CMakeLists.txt")
+            message(STATUS "JXS source not found - skipping JXS build (run: git submodule update --init)")
+            set(BUILD_JXS OFF)
+        endif()
+    endif()
+
+    if(BUILD_JXS)
         ExternalProject_Add(jxs-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/jxs
             BINARY_DIR ${CMAKE_BINARY_DIR}/jxs-build
@@ -255,6 +295,14 @@ if(BUILD_ENCODERS)
     endif()
 
     # libwebp encoder - optimized version with SIMD
+    if(BUILD_LIBWEBP)
+        # Check if libwebp source exists
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/libwebp/CMakeLists.txt")
+            message(STATUS "libwebp source not found - skipping libwebp build (run: git submodule update --init)")
+            set(BUILD_LIBWEBP OFF)
+        endif()
+    endif()
+
     if(BUILD_LIBWEBP)
         ExternalProject_Add(libwebp-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libwebp
@@ -336,9 +384,9 @@ message(STATUS "  libjpeg-turbo:   ${BUILD_LIBJPEG_TURBO}")
 message(STATUS "  JXS:             ${BUILD_JXS}")
 message(STATUS "  libwebp:         ${BUILD_LIBWEBP}")
 if(ANDROID)
-    message(STATUS "  android-mediacodec: ON (hardware encoders)")
+    message(STATUS "  android_mediacodec: ON (hardware encoders)")
 else()
-    message(STATUS "  android-mediacodec: OFF (Android only)")
+    message(STATUS "  android_mediacodec: OFF (Android only)")
 endif()
 message(STATUS "==============================================")
 
