@@ -308,7 +308,8 @@ int android_mediacodec_encode_frame(const uint8_t* input_buffer,
   int frames_recv = 0;
   bool input_eos_sent = false;
   bool output_eos_recv = false;
-  int64_t timeout_us = 500000;
+  // Use short timeout for single frame encoding (10ms)
+  int64_t timeout_us = 10000;
 
   while (!output_eos_recv) {
     if (!input_eos_sent) {
@@ -446,13 +447,15 @@ int android_mediacodec_encode_frame(const uint8_t* input_buffer,
   DEBUG(1, "Encoded %d frames, received %d frames", frames_sent, frames_recv);
 
   // 8. clean up
-  DEBUG(2, "Flushing codec...");
-  AMediaCodec_flush(codec);
+  // NOTE: Do NOT call flush() here - it's for reset/reuse, not cleanup
+  // After EOS is sent/received, go straight to stop then delete
   DEBUG(2, "Stopping codec...");
   AMediaCodec_stop(codec);
-  stop_binder_thread_pool();
   DEBUG(2, "Deleting codec...");
   AMediaCodec_delete(codec);
+  // Stop binder thread AFTER codec is deleted
+  // (codec deletion needs binder thread for cleanup messages)
+  stop_binder_thread_pool();
 
   // 9. return result via output parameters
   *output_buffer = out_buffer;

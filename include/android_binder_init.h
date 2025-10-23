@@ -97,8 +97,9 @@ inline bool init_binder_thread_pool(int debug_level = 0) {
                               (void*)(long)debug_level};
       if (pthread_create(&g_binder_thread, nullptr, thread_fn, args) == 0) {
         // Don't detach - we need to clean up later
-        // Give thread time to start
-        usleep(100000);  // 100ms
+        // Give thread minimal time to start (1ms is enough for thread
+        // scheduling)
+        usleep(1000);  // 1ms
         BINDER_DEBUG(debug_level, 2, "Binder thread started successfully");
         return true;
       }
@@ -110,13 +111,12 @@ inline bool init_binder_thread_pool(int debug_level = 0) {
   return false;
 }
 
-// Give binder thread a grace period to finish processing
+// Stop binder thread - call stopProcess and join the thread
 inline void stop_binder_thread_pool() {
   if (g_binder_thread != 0) {
     BINDER_DEBUG(g_binder_debug_level, 2, "Stopping binder thread...");
 
-    // Try to call IPCThreadState::stopProcess() to make the thread actually
-    // exit
+    // Call IPCThreadState::stopProcess() to signal the thread to exit
     void* handle = dlopen("libbinder.so", RTLD_NOW | RTLD_GLOBAL);
     if (handle && g_ipc_state) {
       StopProcessFn stop_process = (StopProcessFn)dlsym(
@@ -125,20 +125,30 @@ inline void stop_binder_thread_pool() {
       if (stop_process) {
         BINDER_DEBUG(g_binder_debug_level, 2,
                      "Calling IPCThreadState::stopProcess()...");
-        stop_process(g_ipc_state);  // true = immediate
+        stop_process(g_ipc_state);
+        BINDER_DEBUG(g_binder_debug_level, 2, "stopProcess() returned");
       } else {
         BINDER_DEBUG(g_binder_debug_level, 2,
-                     "stopProcess() not found, using grace period");
+                     "stopProcess() not found, thread may not exit");
       }
     }
 
-    // Give the thread time to process the stop signal and wind down
-    // Reduced from 1s to 300ms since stopProcess should be faster
-    usleep(300000);  // 300ms grace period
+    // Join the thread to wait for it to finish
+    // stopProcess() makes joinThreadPool() return, so this should be fast
+    BINDER_DEBUG(g_binder_debug_level, 2, "Joining binder thread...");
+    void* thread_result = nullptr;
+    int join_result = pthread_join(g_binder_thread, &thread_result);
+    if (join_result == 0) {
+      BINDER_DEBUG(g_binder_debug_level, 2,
+                   "Binder thread joined successfully");
+    } else {
+      BINDER_DEBUG(g_binder_debug_level, 1, "pthread_join failed: %d",
+                   join_result);
+    }
 
-    BINDER_DEBUG(g_binder_debug_level, 2, "Binder thread stop complete");
     g_binder_thread = 0;
     g_ipc_state = nullptr;
+    BINDER_DEBUG(g_binder_debug_level, 2, "Binder thread cleanup complete");
   }
 }
 
