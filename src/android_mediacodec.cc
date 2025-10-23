@@ -519,8 +519,8 @@ static int encode_frames(const Options& opt) {
 
   uint8_t* output_buffer = nullptr;
   size_t output_size = 0;
-  int result = android_mediacodec_encode_frame(
-      input_buffer, read_size, &format, &output_buffer, &output_size);
+  int result = android_mediacodec_encode_frame(input_buffer, read_size, &format,
+                                               &output_buffer, &output_size);
 
   // Free input buffer
   free(input_buffer);

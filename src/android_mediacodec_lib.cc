@@ -4,10 +4,11 @@
 
 #include "android_mediacodec_lib.h"
 
+#include <sys/time.h>
+
 #include <cstdio>
 #include <cstring>
 #include <string>
-#include <sys/time.h>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -192,10 +193,11 @@ static void set_amediaformat(AMediaFormat* format, const char* mime_type,
 #ifdef __ANDROID__
 
 // Public API: Encode frames using MediaCodec
-int android_mediacodec_encode_frame(
-    const uint8_t* input_buffer, size_t input_size,
-    const MediaCodecFormat* fmt,
-    uint8_t** output_buffer, size_t* output_size) {
+int android_mediacodec_encode_frame(const uint8_t* input_buffer,
+                                    size_t input_size,
+                                    const MediaCodecFormat* fmt,
+                                    uint8_t** output_buffer,
+                                    size_t* output_size) {
   // Initialize output to NULL/0
   *output_buffer = nullptr;
   *output_size = 0;
@@ -243,7 +245,8 @@ int android_mediacodec_encode_frame(
         bitrate_local, fmt->frame_count);
 
   // 2. create codec
-  DEBUG(1, "Creating codec: AMediaCodec_createCodecByName(%s)", fmt->codec_name);
+  DEBUG(1, "Creating codec: AMediaCodec_createCodecByName(%s)",
+        fmt->codec_name);
   AMediaCodec* codec = AMediaCodec_createCodecByName(fmt->codec_name);
   if (!codec) {
     fprintf(stderr, "Error: Cannot create codec: %s\n", fmt->codec_name);
@@ -460,10 +463,11 @@ int android_mediacodec_encode_frame(
 #else  // !__ANDROID__
 
 // Stub implementation for non-Android platforms
-int android_mediacodec_encode_frame(
-    const uint8_t* input_buffer, size_t input_size,
-    const MediaCodecFormat* fmt,
-    uint8_t** output_buffer, size_t* output_size) {
+int android_mediacodec_encode_frame(const uint8_t* input_buffer,
+                                    size_t input_size,
+                                    const MediaCodecFormat* fmt,
+                                    uint8_t** output_buffer,
+                                    size_t* output_size) {
   (void)input_buffer;
   (void)input_size;
   (void)fmt;

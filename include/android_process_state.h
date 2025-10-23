@@ -1,6 +1,7 @@
 // Minimal shim for android::ProcessState
-// The C++ Binder API is not part of the NDK, but libbinder.so is available on all Android devices
-// This header declares just the functions we need to initialize the Binder thread pool
+// The C++ Binder API is not part of the NDK, but libbinder.so is available on
+// all Android devices This header declares just the functions we need to
+// initialize the Binder thread pool
 
 #ifndef PROCESSSTATE_SHIM_H
 #define PROCESSSTATE_SHIM_H
@@ -11,10 +12,10 @@ namespace android {
 
 // Forward declaration - minimal interface we need
 class ProcessState {
-public:
-    static ProcessState* self();
-    void startThreadPool();
-    void setThreadPoolMaxThreadCount(size_t maxThreads);
+ public:
+  static ProcessState* self();
+  void startThreadPool();
+  void setThreadPoolMaxThreadCount(size_t maxThreads);
 };
 
 }  // namespace android

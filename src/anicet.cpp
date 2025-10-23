@@ -164,7 +164,8 @@ static std::map<std::string, long> parse_simpleperf_output(
   return metrics;
 }
 
-// --------------- CLI parsing -------------------
+
+// CLI parsing
 struct Options {
   std::vector<std::string> cmd;
   std::vector<std::pair<std::string, std::string>> tags;
@@ -298,7 +299,8 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
   return !opt.cmd.empty();
 }
 
-// --------------- global for signal forwarding ---------------
+
+// global for signal forwarding
 static pid_t g_child = -1;
 static void relay_signal(int sig) {
   if (g_child > 0) kill(g_child, sig);
@@ -315,7 +317,7 @@ static void install_signal_handlers() {
   }
 }
 
-// --------------- main --------------------------
+
 int main(int argc, char** argv) {
   Options opt;
   if (!parse_cli(argc, argv, opt)) {

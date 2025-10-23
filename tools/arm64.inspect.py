@@ -49,7 +49,6 @@ INSPECT_ARRAY = {
     "fphp": r"\s(fcvt\s+h|fadd\s+h|fmul\s+h|fdiv\s+h|fsub\s+h)",
     "fcma": r"\s(fcmla|fcadd)",
     "frint": r"\s(frint32x|frint64x|frint32z|frint64z)",
-
     # 2. Cryptography and hash extensions
     "aes": r"\s(aese|aesd|aesmc|aesimc)",
     "pmull": r"\s(pmull)",
@@ -59,7 +58,6 @@ INSPECT_ARRAY = {
     "sha512": r"\s(sha512[hsu])",
     "sm3": r"\s(sm3ss1|sm3tt[12][ab]|sm3partw[12])",
     "sm4": r"\s(sm4e|sm4ekey)",
-
     # 3. Memory, atomics, and synchronization
     "atomics": r"\s(ldadd|ldclr|ldeor|ldset|ldsmax|ldsmin|ldumax|ldumin|cas|casp|swp)",
     "dcpop": r"\sdc\s+cvap",
@@ -70,14 +68,12 @@ INSPECT_ARRAY = {
     "dgh": r"\sdgh",
     "sb": r"\ssb",
     "wfxt": r"\s(wfet|wfit)",
-
     # 4. Security and control-flow
     "paca": r"\s(pacia|pacib|autia|autib)",
     "pacg": r"\s(pacda|pacdb|pacga|autda|autdb|autga)",
     "bti": r"\sbti",
     "flagm": r"\s(setf8|setf16|rmif)",
     "flagm2": r"\s(axflag|xaflag)",
-
     # 5. Data conversion and integer extensions
     "jscvt": r"\sfjcvtzs",
     "crc32": r"\scrc32[bhwxc]",
@@ -413,7 +409,8 @@ Examples:
         for key, value in results.items():
             # Skip instruction counts and percentages if debug level < 1
             if debug_level < 1 and (
-                key.endswith("_instructions") or key.endswith("_instructions_percentage")
+                key.endswith("_instructions")
+                or key.endswith("_instructions_percentage")
             ):
                 continue
 

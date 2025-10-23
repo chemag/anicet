@@ -14,33 +14,34 @@ extern "C" {
 
 // MediaCodec encoding format configuration
 typedef struct {
-  int width;                // Frame width in pixels
-  int height;               // Frame height in pixels
-  const char* codec_name;   // MediaCodec name (e.g., "c2.qti.heic.encoder")
-  const char* color_format; // Color format string ("yuv420p", "nv12", "nv21")
-  int quality;              // Quality 0-100 (used to calculate bitrate if bitrate < 0)
-  int bitrate;              // Target bitrate in bps (if < 0, calculated from quality)
-  int frame_count;          // Number of frames to encode (reuses input_buffer)
-  int debug_level;          // Debug verbosity (0 = quiet, 1+ = verbose)
+  int width;                 // Frame width in pixels
+  int height;                // Frame height in pixels
+  const char* codec_name;    // MediaCodec name (e.g., "c2.qti.heic.encoder")
+  const char* color_format;  // Color format string ("yuv420p", "nv12", "nv21")
+  int quality;      // Quality 0-100 (used to calculate bitrate if bitrate < 0)
+  int bitrate;      // Target bitrate in bps (if < 0, calculated from quality)
+  int frame_count;  // Number of frames to encode (reuses input_buffer)
+  int debug_level;  // Debug verbosity (0 = quiet, 1+ = verbose)
 } MediaCodecFormat;
 
 // Encode frames using Android MediaCodec
 //
 // Parameters:
-//   input_buffer:  Raw YUV frame data (single frame, will be reused frame_count times)
-//   input_size:    Size of input buffer in bytes
-//   format:        Encoding configuration (codec, dimensions, quality, etc.)
-//   output_buffer: Pointer to receive allocated output buffer (caller must free())
-//   output_size:   Pointer to receive output buffer size
+//   input_buffer:  Raw YUV frame data (single frame, will be reused frame_count
+//   times) input_size:    Size of input buffer in bytes format:        Encoding
+//   configuration (codec, dimensions, quality, etc.) output_buffer: Pointer to
+//   receive allocated output buffer (caller must free()) output_size:   Pointer
+//   to receive output buffer size
 //
 // Returns:
 //   0 on success, non-zero error code on failure
 //   On success, *output_buffer contains encoded data (caller must free())
 //   On failure, *output_buffer is NULL
-int android_mediacodec_encode_frame(
-    const uint8_t* input_buffer, size_t input_size,
-    const MediaCodecFormat* format,
-    uint8_t** output_buffer, size_t* output_size);
+int android_mediacodec_encode_frame(const uint8_t* input_buffer,
+                                    size_t input_size,
+                                    const MediaCodecFormat* format,
+                                    uint8_t** output_buffer,
+                                    size_t* output_size);
 
 #ifdef __cplusplus
 }
