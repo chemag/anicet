@@ -1,47 +1,10 @@
 # CMakeLists.txt for anicet wrapper
 
-# Define the anicet executable
-add_executable(anicet anicet.cpp)
-
-# Set C++ standard
-set_target_properties(anicet PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
-)
-
-# Compiler flags
-target_compile_options(anicet PRIVATE
-    -O2
-    -Wall
-    -Wextra
-    -Werror
-)
-
-# Linker flags
+# Linker flags options
 option(ANICET_STATIC "Build anicet with static linking" ON)
 option(ANICET_STRIP "Strip symbols from anicet binary" ON)
 
-if(ANICET_STATIC)
-    if(ANDROID)
-        # Android: use -static for full static linking
-        target_link_options(anicet PRIVATE -static)
-    else()
-        # Host: link standard libraries statically where possible
-        target_link_options(anicet PRIVATE -static-libgcc -static-libstdc++)
-    endif()
-endif()
-
-if(ANICET_STRIP)
-    target_link_options(anicet PRIVATE -s)
-endif()
-
-# Installation
-install(TARGETS anicet
-    RUNTIME DESTINATION bin
-    COMPONENT anicet
-)
-
-# Android MediaCodec encoder (Android only)
+# Android MediaCodec encoder (Android only) - define first
 if(ANDROID)
     # Build MediaCodec library
     add_library(android_mediacodec_lib STATIC android_mediacodec_lib.cc)
@@ -68,7 +31,73 @@ if(ANDROID)
         mediandk  # MediaCodec, MediaFormat APIs
         log       # Android logging
     )
+endif()
 
+# Define the anicet executable (always built)
+add_executable(anicet anicet.cpp anicet_runner.cc)
+
+# Set C++ standard
+set_target_properties(anicet PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+
+# Include directories for anicet
+target_include_directories(anicet PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_INSTALL_PREFIX}/include
+)
+
+# Compiler flags
+target_compile_options(anicet PRIVATE
+    -O2
+    -Wall
+    -Wextra
+    -Werror
+)
+
+# Link encoder libraries
+target_link_libraries(anicet PRIVATE
+    ${CMAKE_INSTALL_PREFIX}/lib/libx265.a
+    ${CMAKE_INSTALL_PREFIX}/lib/libSvtAv1Enc.a
+    ${CMAKE_INSTALL_PREFIX}/lib/libjpeg.a
+    ${CMAKE_INSTALL_PREFIX}/lib/libturbojpeg.a
+    ${CMAKE_INSTALL_PREFIX}/lib/libwebp.a
+    ${CMAKE_INSTALL_PREFIX}/lib/libhwy.a
+    ${CMAKE_INSTALL_PREFIX}/lib/libsharpyuv.a
+)
+
+# Link android_mediacodec_lib on Android
+if(ANDROID)
+    target_link_libraries(anicet PRIVATE android_mediacodec_lib)
+else()
+    # Add pthread and other system libraries (not needed on Android)
+    target_link_libraries(anicet PRIVATE pthread m dl)
+endif()
+
+# Linker flags for anicet
+if(ANICET_STATIC)
+    if(ANDROID)
+        # Android: cannot use -static because we need dynamic mediandk
+        target_link_options(anicet PRIVATE -static-libgcc -static-libstdc++)
+    else()
+        # Host: link standard libraries statically where possible
+        target_link_options(anicet PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+endif()
+
+if(ANICET_STRIP)
+    target_link_options(anicet PRIVATE -s)
+endif()
+
+# Installation
+install(TARGETS anicet
+    RUNTIME DESTINATION bin
+    COMPONENT anicet
+)
+
+# Android MediaCodec executable (Android only)
+if(ANDROID)
     # Build MediaCodec executable
     add_executable(android_mediacodec android_mediacodec.cc)
 

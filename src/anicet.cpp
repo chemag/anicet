@@ -21,6 +21,9 @@
 #include <string>
 #include <vector>
 
+// Encoder experiment runner
+#include "anicet_runner.h"
+
 
 // small utilities
 static long now_ms_monotonic() {
@@ -173,16 +176,22 @@ struct Options {
   int nice = 0;                         // 0 means unchanged
   int timeout_ms = 0;                   // 0 means no timeout
   bool json = false;                    // default CSV
-  bool add_simpleperf = false;          // wrap command with simpleperf
-  std::string simpleperf_cmd = "stat";  // simpleperf subcommand
+  bool use_simpleperf = false;          // wrap with simpleperf (default false)
   std::string simpleperf_events;        // comma-separated event list
+  // Media input parameters for library API mode
+  std::string image_file;
+  int width = 0;
+  int height = 0;
+  std::string color_format;
+  std::string codec = "all";            // codec to use (default: all)
 };
 
 static void print_help(const char* argv0) {
   fprintf(
       stderr,
       "Usage:\n"
-      "  %s [options] -- <command> [args...]\n\n"
+      "  %s [options] -- <command> [args...]\n"
+      "  %s [options] --image FILE --width N --height N --color-format FORMAT\n\n"
       "Options:\n"
       "  --tag key=val            Repeatable; attach metadata to output row\n"
       "  --cpus LIST              CPU affinity, e.g. 0,2,4-5\n"
@@ -190,13 +199,20 @@ static void print_help(const char* argv0) {
       "for negative\n"
       "  --timeout-ms N           Kill child if it runs longer than N ms\n"
       "  --json                   Emit JSON (default: CSV)\n"
-      "  --add-simpleperf         Wrap command with simpleperf\n"
-      "  --simpleperf-command CMD Simpleperf subcommand (default: stat)\n"
+      "  --simpleperf             Wrap with simpleperf (default: disabled)\n"
+      "  --no-simpleperf          Disable simpleperf wrapping\n"
       "  --simpleperf-events LIST Comma-separated perf events\n"
+      "  --image FILE             Image file to encode (library API mode)\n"
+      "  --width N                Image width in pixels\n"
+      "  --height N               Image height in pixels\n"
+      "  --color-format FORMAT    Color format (e.g., yuv420p)\n"
+      "  --codec CODEC            Codec to use: x265, x265-noopt, svt-av1,\n"
+      "                           libjpeg-turbo, libjpeg-turbo-noopt, jpegli,\n"
+      "                           webp, webp-noopt, mediacodec, all (default: all)\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
-      argv0);
+      argv0, argv0);
 }
 
 static bool starts_with(const char* s, const char* pfx) {
@@ -266,16 +282,12 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       opt.timeout_ms = atoi(argv[++i]);
       continue;
     }
-    if (strcmp(argv[i], "--add-simpleperf") == 0) {
-      opt.add_simpleperf = true;
+    if (strcmp(argv[i], "--simpleperf") == 0) {
+      opt.use_simpleperf = true;
       continue;
     }
-    if (strcmp(argv[i], "--simpleperf-command") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--simpleperf-command needs a command\n");
-        return false;
-      }
-      opt.simpleperf_cmd = argv[++i];
+    if (strcmp(argv[i], "--no-simpleperf") == 0) {
+      opt.use_simpleperf = false;
       continue;
     }
     if (strcmp(argv[i], "--simpleperf-events") == 0) {
@@ -286,17 +298,85 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       opt.simpleperf_events = argv[++i];
       continue;
     }
+    if (strcmp(argv[i], "--image") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--image needs a file path\n");
+        return false;
+      }
+      opt.image_file = argv[++i];
+      continue;
+    }
+    if (strcmp(argv[i], "--width") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--width needs N\n");
+        return false;
+      }
+      opt.width = atoi(argv[++i]);
+      continue;
+    }
+    if (strcmp(argv[i], "--height") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--height needs N\n");
+        return false;
+      }
+      opt.height = atoi(argv[++i]);
+      continue;
+    }
+    if (strcmp(argv[i], "--color-format") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--color-format needs a format\n");
+        return false;
+      }
+      opt.color_format = argv[++i];
+      continue;
+    }
+    if (strcmp(argv[i], "--codec") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--codec needs a codec name\n");
+        return false;
+      }
+      opt.codec = argv[++i];
+      // Validate codec name
+      std::set<std::string> valid_codecs = {
+        "x265", "x265-noopt", "svt-av1", "libjpeg-turbo",
+        "libjpeg-turbo-noopt", "jpegli", "webp", "webp-noopt",
+        "mediacodec", "all"
+      };
+      if (valid_codecs.find(opt.codec) == valid_codecs.end()) {
+        fprintf(stderr, "Invalid codec: %s\n", opt.codec.c_str());
+        return false;
+      }
+      continue;
+    }
     fprintf(stderr, "Unknown option: %s\n", argv[i]);
     return false;
   }
+
+  // Command is optional if media parameters are provided
+  bool has_media_params = !opt.image_file.empty() && opt.width > 0 &&
+                          opt.height > 0 && !opt.color_format.empty();
+
   if (i >= argc) {
-    fprintf(stderr, "Missing -- and command\n");
-    return false;
+    // No command provided - check if we have media parameters
+    if (!has_media_params) {
+      fprintf(stderr, "Missing -- and command, or --image/--width/--height/--color-format\n");
+      return false;
+    }
+    return true;
   }
+
+  // Command provided - collect it
   for (; i < argc; ++i) {
     opt.cmd.emplace_back(argv[i]);
   }
-  return !opt.cmd.empty();
+
+  // Can't have both command and media parameters
+  if (has_media_params && !opt.cmd.empty()) {
+    fprintf(stderr, "Cannot specify both command and media parameters\n");
+    return false;
+  }
+
+  return !opt.cmd.empty() || has_media_params;
 }
 
 
@@ -329,9 +409,13 @@ int main(int argc, char** argv) {
 
   long t0_ms = now_ms_monotonic();
 
+  // Check if we're in library API mode (media parameters provided)
+  bool library_mode = !opt.image_file.empty() && opt.width > 0 &&
+                      opt.height > 0 && !opt.color_format.empty();
+
   // Create temp file for simpleperf output if needed
   std::string simpleperf_out_path;
-  if (opt.add_simpleperf) {
+  if (opt.use_simpleperf) {
     char tmpl[] = "/data/local/tmp/simpleperf_XXXXXX";
     int fd = mkstemp(tmpl);
     if (fd < 0) {
@@ -340,6 +424,60 @@ int main(int argc, char** argv) {
     }
     close(fd);
     simpleperf_out_path = tmpl;
+  }
+
+  // Library API mode: call anicet_experiment() directly
+  if (library_mode && !opt.use_simpleperf) {
+    // Apply affinity and nice settings
+    if (!opt.cpus.empty()) set_affinity_from_cpulist(opt.cpus);
+    if (opt.nice != 0) set_nice(opt.nice);
+
+    // Read image file
+    std::string image_data;
+    if (!read_file(opt.image_file, image_data)) {
+      fprintf(stderr, "Failed to read image file: %s\n", opt.image_file.c_str());
+      return 1;
+    }
+
+    // Call anicet_experiment()
+    int result = anicet_experiment(
+        reinterpret_cast<const uint8_t*>(image_data.data()),
+        image_data.size(),
+        opt.height,
+        opt.width,
+        opt.color_format.c_str(),
+        opt.codec.c_str()
+    );
+
+    long t1_ms = now_ms_monotonic();
+    long wall_ms = t1_ms - t0_ms;
+
+    // Output results
+    if (opt.json) {
+      printf("{");
+      bool first = true;
+      auto emit_ki = [&](const char* k, long v) {
+        printf("%s\"%s\":%ld", first ? "" : ",", k, v);
+        first = false;
+      };
+      for (auto& kv : opt.tags) {
+        printf("%s\"%s\":\"%s\"", first ? "" : ",", kv.first.c_str(), kv.second.c_str());
+        first = false;
+      }
+      emit_ki("wall_ms", wall_ms);
+      emit_ki("exit", result);
+      printf("}\n");
+    } else {
+      bool first = true;
+      for (auto& kv : opt.tags) {
+        printf("%s%s=%s", first ? "" : ",", kv.first.c_str(), kv.second.c_str());
+        first = false;
+      }
+      if (first) printf("run=na");
+      printf(",wall_ms=%ld,exit=%d\n", wall_ms, result);
+    }
+
+    return result;
   }
 
   // Fork
@@ -358,11 +496,10 @@ int main(int argc, char** argv) {
     std::vector<std::string> cmd_vec;
     std::vector<char*> av;
 
-    if (opt.add_simpleperf) {
-      // Wrap with simpleperf: simpleperf <cmd> -e <events> -o <out> --
-      // <original cmd>
+    if (opt.use_simpleperf) {
+      // Wrap with simpleperf stat
       cmd_vec.push_back("simpleperf");
-      cmd_vec.push_back(opt.simpleperf_cmd);
+      cmd_vec.push_back("stat");
       if (!opt.simpleperf_events.empty()) {
         cmd_vec.push_back("-e");
         cmd_vec.push_back(opt.simpleperf_events);
@@ -370,10 +507,29 @@ int main(int argc, char** argv) {
       cmd_vec.push_back("-o");
       cmd_vec.push_back(simpleperf_out_path);
       cmd_vec.push_back("--");
-      for (const auto& s : opt.cmd) {
-        cmd_vec.push_back(s);
+
+      if (library_mode) {
+        // Re-exec ourselves with --no-simpleperf and media parameters
+        cmd_vec.push_back(argv[0]);
+        cmd_vec.push_back("--no-simpleperf");
+        cmd_vec.push_back("--image");
+        cmd_vec.push_back(opt.image_file);
+        cmd_vec.push_back("--width");
+        cmd_vec.push_back(std::to_string(opt.width));
+        cmd_vec.push_back("--height");
+        cmd_vec.push_back(std::to_string(opt.height));
+        cmd_vec.push_back("--color-format");
+        cmd_vec.push_back(opt.color_format);
+        cmd_vec.push_back("--codec");
+        cmd_vec.push_back(opt.codec);
+      } else {
+        // Wrap original command
+        for (const auto& s : opt.cmd) {
+          cmd_vec.push_back(s);
+        }
       }
     } else {
+      // No simpleperf wrapping
       cmd_vec = opt.cmd;
     }
 
@@ -455,7 +611,7 @@ int main(int argc, char** argv) {
 
   // Parse simpleperf output if available
   std::map<std::string, long> simpleperf_metrics;
-  if (opt.add_simpleperf && !simpleperf_out_path.empty()) {
+  if (opt.use_simpleperf && !simpleperf_out_path.empty()) {
     std::string simpleperf_output;
     if (read_file(simpleperf_out_path, simpleperf_output)) {
       simpleperf_metrics = parse_simpleperf_output(simpleperf_output);
