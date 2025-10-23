@@ -8,6 +8,11 @@
 #include <cstring>
 #include <vector>
 
+// POSIX headers for CLI tool implementations
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 // Encoder library headers
 #include "android_mediacodec_lib.h"
 #include "jpeglib.h"
@@ -387,9 +392,25 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
     return -1;
   }
 
+  // SVT-AV1 requires EbSvtIOFormat structure with separate Y/Cb/Cr pointers
+  EbSvtIOFormat input_picture;
+  memset(&input_picture, 0, sizeof(input_picture));
+
+  // YUV420p layout: Y plane, then U (Cb), then V (Cr)
+  size_t y_size = width * height;
+  size_t uv_size = y_size / 4;
+
+  input_picture.luma = (uint8_t*)input_buffer;
+  input_picture.cb = (uint8_t*)input_buffer + y_size;
+  input_picture.cr = (uint8_t*)input_buffer + y_size + uv_size;
+  input_picture.y_stride = width;
+  input_picture.cb_stride = width / 2;
+  input_picture.cr_stride = width / 2;
+
   EbBufferHeaderType input_buf;
   memset(&input_buf, 0, sizeof(input_buf));
-  input_buf.p_buffer = (uint8_t*)input_buffer;
+  input_buf.size = sizeof(EbBufferHeaderType);  // Required for version check
+  input_buf.p_buffer = (uint8_t*)&input_picture;
   input_buf.n_filled_len = input_size;
   input_buf.n_alloc_len = input_size;
   input_buf.pic_type = EB_AV1_KEY_PICTURE;
@@ -402,6 +423,7 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
     // Send EOS to flush the encoder
     EbBufferHeaderType eos_buffer;
     memset(&eos_buffer, 0, sizeof(eos_buffer));
+    eos_buffer.size = sizeof(EbBufferHeaderType);  // Required for version check
     eos_buffer.flags = EB_BUFFERFLAG_EOS;
     svt_av1_enc_send_picture(handle, &eos_buffer);
 
@@ -428,66 +450,278 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   return result;
 }
 
-// x265 encoder (non-optimized) - stub implementation
+// x265 encoder (non-optimized) - uses CLI tool to avoid symbol conflicts
 // Note: Both libx265.a and libx265-noopt.a export the same symbols,
 // so we cannot link both into the same binary. Use the x265-noopt CLI tool
 // instead.
 int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           uint8_t* output_buffer, size_t* output_size) {
-  (void)input_buffer;
-  (void)input_size;
-  (void)height;
-  (void)width;
-  (void)color_format;
-  (void)output_buffer;
-  (void)output_size;
+  (void)color_format;  // Unused (yuv420p assumed)
 
-  fprintf(stderr, "x265-noopt: Library API not available (symbol conflict)\n");
-  fprintf(stderr,
-          "x265-noopt: Use CLI tool 'x265-noopt' instead for non-optimized "
-          "encoding\n");
-  return -1;
+  // Validate inputs
+  if (!input_buffer || !output_buffer || !output_size) {
+    return -1;
+  }
+
+  size_t max_output_size = *output_size;
+  *output_size = 0;
+
+  // Write input to temporary file
+  char input_temp[] = "/tmp/anicet_x265_XXXXXX.yuv";
+  int input_fd = mkstemps(input_temp, 4);
+  if (input_fd < 0) {
+    fprintf(stderr, "x265-noopt: Failed to create temp input file\n");
+    return -1;
+  }
+  if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
+    fprintf(stderr, "x265-noopt: Failed to write temp input file\n");
+    close(input_fd);
+    unlink(input_temp);
+    return -1;
+  }
+  close(input_fd);
+
+  // Create temp output file
+  char output_temp[] = "/tmp/anicet_x265_XXXXXX.hevc";
+  int output_fd = mkstemps(output_temp, 5);
+  if (output_fd < 0) {
+    fprintf(stderr, "x265-noopt: Failed to create temp output file\n");
+    unlink(input_temp);
+    return -1;
+  }
+  close(output_fd);
+
+  // Call x265-noopt CLI tool
+  char command[1024];
+  snprintf(command, sizeof(command),
+           "x265-noopt --input %s --input-res %dx%d --fps 1 --frames 1 "
+           "--output %s --log-level error 2>&1",
+           input_temp, width, height, output_temp);
+
+  int ret = system(command);
+  unlink(input_temp);
+
+  if (ret != 0) {
+    fprintf(stderr, "x265-noopt: CLI tool failed with exit code %d\n", ret);
+    unlink(output_temp);
+    return -1;
+  }
+
+  // Read output file
+  FILE* out_fp = fopen(output_temp, "rb");
+  if (!out_fp) {
+    fprintf(stderr, "x265-noopt: Failed to open output file\n");
+    unlink(output_temp);
+    return -1;
+  }
+
+  fseek(out_fp, 0, SEEK_END);
+  long file_size = ftell(out_fp);
+  fseek(out_fp, 0, SEEK_SET);
+
+  if (file_size < 0 || (size_t)file_size > max_output_size) {
+    fprintf(stderr, "x265-noopt: Output too large (%ld bytes, %zu available)\n",
+            file_size, max_output_size);
+    fclose(out_fp);
+    unlink(output_temp);
+    return -1;
+  }
+
+  size_t bytes_read = fread(output_buffer, 1, file_size, out_fp);
+  fclose(out_fp);
+  unlink(output_temp);
+
+  if (bytes_read != (size_t)file_size) {
+    fprintf(stderr, "x265-noopt: Failed to read output file\n");
+    return -1;
+  }
+
+  *output_size = bytes_read;
+  return 0;
 }
 
-// libjpeg-turbo encoder (non-optimized) - stub implementation
+// libjpeg-turbo encoder (non-optimized) - uses CLI tool to avoid symbol
+// conflicts
 int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
                                   size_t input_size, int height, int width,
                                   const char* color_format,
                                   uint8_t* output_buffer, size_t* output_size) {
-  (void)input_buffer;
-  (void)input_size;
-  (void)height;
-  (void)width;
-  (void)color_format;
-  (void)output_buffer;
-  (void)output_size;
+  (void)height;        // Used in command line
+  (void)width;         // Used in command line
+  (void)color_format;  // Unused (yuv420p assumed)
 
-  fprintf(stderr,
-          "libjpeg-turbo-noopt: Library API not available (symbol conflict)\n");
-  fprintf(stderr,
-          "libjpeg-turbo-noopt: Use CLI tool 'cjpeg-noopt' instead for "
-          "non-optimized encoding\n");
-  return -1;
+  // Validate inputs
+  if (!input_buffer || !output_buffer || !output_size) {
+    return -1;
+  }
+
+  size_t max_output_size = *output_size;
+  *output_size = 0;
+
+  // Write input to temporary file
+  char input_temp[] = "/tmp/anicet_jpeg_XXXXXX.yuv";
+  int input_fd = mkstemps(input_temp, 4);
+  if (input_fd < 0) {
+    fprintf(stderr, "libjpeg-turbo-noopt: Failed to create temp input file\n");
+    return -1;
+  }
+  if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
+    fprintf(stderr, "libjpeg-turbo-noopt: Failed to write temp input file\n");
+    close(input_fd);
+    unlink(input_temp);
+    return -1;
+  }
+  close(input_fd);
+
+  // Create temp output file
+  char output_temp[] = "/tmp/anicet_jpeg_XXXXXX.jpg";
+  int output_fd = mkstemps(output_temp, 4);
+  if (output_fd < 0) {
+    fprintf(stderr, "libjpeg-turbo-noopt: Failed to create temp output file\n");
+    unlink(input_temp);
+    return -1;
+  }
+  close(output_fd);
+
+  // Call cjpeg-noopt CLI tool
+  // cjpeg reads raw image data from stdin or file
+  char command[1024];
+  snprintf(command, sizeof(command),
+           "cjpeg-noopt -quality 75 -outfile %s -rgb -imgfmt yuv420 %s 2>&1",
+           output_temp, input_temp);
+
+  int ret = system(command);
+  unlink(input_temp);
+
+  if (ret != 0) {
+    fprintf(stderr, "libjpeg-turbo-noopt: CLI tool failed with exit code %d\n",
+            ret);
+    unlink(output_temp);
+    return -1;
+  }
+
+  // Read output file
+  FILE* out_fp = fopen(output_temp, "rb");
+  if (!out_fp) {
+    fprintf(stderr, "libjpeg-turbo-noopt: Failed to open output file\n");
+    unlink(output_temp);
+    return -1;
+  }
+
+  fseek(out_fp, 0, SEEK_END);
+  long file_size = ftell(out_fp);
+  fseek(out_fp, 0, SEEK_SET);
+
+  if (file_size < 0 || (size_t)file_size > max_output_size) {
+    fprintf(
+        stderr,
+        "libjpeg-turbo-noopt: Output too large (%ld bytes, %zu available)\n",
+        file_size, max_output_size);
+    fclose(out_fp);
+    unlink(output_temp);
+    return -1;
+  }
+
+  size_t bytes_read = fread(output_buffer, 1, file_size, out_fp);
+  fclose(out_fp);
+  unlink(output_temp);
+
+  if (bytes_read != (size_t)file_size) {
+    fprintf(stderr, "libjpeg-turbo-noopt: Failed to read output file\n");
+    return -1;
+  }
+
+  *output_size = bytes_read;
+  return 0;
 }
 
-// WebP encoder (non-optimized) - stub implementation
+// WebP encoder (non-optimized) - uses CLI tool to avoid symbol conflicts
 int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           uint8_t* output_buffer, size_t* output_size) {
-  (void)input_buffer;
-  (void)input_size;
-  (void)height;
-  (void)width;
-  (void)color_format;
-  (void)output_buffer;
-  (void)output_size;
+  (void)height;        // Used in command line
+  (void)width;         // Used in command line
+  (void)color_format;  // Unused (yuv420p assumed)
 
-  fprintf(stderr, "webp-noopt: Library API not available (symbol conflict)\n");
-  fprintf(stderr,
-          "webp-noopt: Use CLI tool 'cwebp-noopt' instead for non-optimized "
-          "encoding\n");
-  return -1;
+  // Validate inputs
+  if (!input_buffer || !output_buffer || !output_size) {
+    return -1;
+  }
+
+  size_t max_output_size = *output_size;
+  *output_size = 0;
+
+  // Write input to temporary file
+  char input_temp[] = "/tmp/anicet_webp_XXXXXX.yuv";
+  int input_fd = mkstemps(input_temp, 4);
+  if (input_fd < 0) {
+    fprintf(stderr, "webp-noopt: Failed to create temp input file\n");
+    return -1;
+  }
+  if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
+    fprintf(stderr, "webp-noopt: Failed to write temp input file\n");
+    close(input_fd);
+    unlink(input_temp);
+    return -1;
+  }
+  close(input_fd);
+
+  // Create temp output file
+  char output_temp[] = "/tmp/anicet_webp_XXXXXX.webp";
+  int output_fd = mkstemps(output_temp, 5);
+  if (output_fd < 0) {
+    fprintf(stderr, "webp-noopt: Failed to create temp output file\n");
+    unlink(input_temp);
+    return -1;
+  }
+  close(output_fd);
+
+  // Call cwebp-noopt CLI tool
+  char command[1024];
+  snprintf(command, sizeof(command), "cwebp-noopt -q 75 %s -o %s 2>&1",
+           input_temp, output_temp);
+
+  int ret = system(command);
+  unlink(input_temp);
+
+  if (ret != 0) {
+    fprintf(stderr, "webp-noopt: CLI tool failed with exit code %d\n", ret);
+    unlink(output_temp);
+    return -1;
+  }
+
+  // Read output file
+  FILE* out_fp = fopen(output_temp, "rb");
+  if (!out_fp) {
+    fprintf(stderr, "webp-noopt: Failed to open output file\n");
+    unlink(output_temp);
+    return -1;
+  }
+
+  fseek(out_fp, 0, SEEK_END);
+  long file_size = ftell(out_fp);
+  fseek(out_fp, 0, SEEK_SET);
+
+  if (file_size < 0 || (size_t)file_size > max_output_size) {
+    fprintf(stderr, "webp-noopt: Output too large (%ld bytes, %zu available)\n",
+            file_size, max_output_size);
+    fclose(out_fp);
+    unlink(output_temp);
+    return -1;
+  }
+
+  size_t bytes_read = fread(output_buffer, 1, file_size, out_fp);
+  fclose(out_fp);
+  unlink(output_temp);
+
+  if (bytes_read != (size_t)file_size) {
+    fprintf(stderr, "webp-noopt: Failed to read output file\n");
+    return -1;
+  }
+
+  *output_size = bytes_read;
+  return 0;
 }
 
 // Android MediaCodec encoder - wrapper that adapts
