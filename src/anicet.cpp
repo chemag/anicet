@@ -1,8 +1,4 @@
-// measure_exec.cpp
-// Build (host NDK toolchain example):
-//   aarch64-linux-android21-clang++ -O2 -static -s -o measure_exec
-//   measure_exec.cpp
-// Or dynamically linked if static is inconvenient.
+// anicet.cpp
 
 #include <fcntl.h>
 #include <sched.h>
@@ -25,7 +21,8 @@
 #include <string>
 #include <vector>
 
-// ----------------- small utils -----------------
+
+// small utilities
 static long now_ms_monotonic() {
   struct timespec ts{};
   clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
