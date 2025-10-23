@@ -26,9 +26,9 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
                     size_t* output_size);
 
 // WebP encoder - non-optimized (no SIMD)
-int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
-                          int height, int width, const char* color_format,
-                          uint8_t* output_buffer, size_t* output_size);
+int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
+                           int height, int width, const char* color_format,
+                           uint8_t* output_buffer, size_t* output_size);
 
 // libjpeg-turbo encoder (using TurboJPEG API) - optimized
 int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
@@ -36,10 +36,10 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
                             uint8_t* output_buffer, size_t* output_size);
 
 // libjpeg-turbo encoder (using TurboJPEG API) - non-optimized (no SIMD)
-int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
-                                  size_t input_size, int height, int width,
-                                  const char* color_format,
-                                  uint8_t* output_buffer, size_t* output_size);
+int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
+                                   size_t input_size, int height, int width,
+                                   const char* color_format,
+                                   uint8_t* output_buffer, size_t* output_size);
 
 // jpegli encoder (JPEG XL's JPEG encoder)
 int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
@@ -52,9 +52,9 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
                     size_t* output_size);
 
 // x265 encoder (H.265/HEVC) - non-optimized (no assembly)
-int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
-                          int height, int width, const char* color_format,
-                          uint8_t* output_buffer, size_t* output_size);
+int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
+                           int height, int width, const char* color_format,
+                           uint8_t* output_buffer, size_t* output_size);
 
 // SVT-AV1 encoder
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
@@ -81,8 +81,8 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
 //   height:       Image height in pixels
 //   width:        Image width in pixels
 //   color_format: Color format string (currently only "yuv420p" supported)
-//   codec_name:   Codec to use: "x265", "x265-noopt", "svt-av1",
-//                 "libjpeg-turbo", "libjpeg-turbo-noopt", "jpegli",
+//   codec_name:   Codec to use: "x265", "x265-nonopt", "svt-av1",
+//                 "libjpeg-turbo", "libjpeg-turbo-nonopt", "jpegli",
 //                 "webp", "mediacodec", "all" (default: all encoders)
 //
 // Returns:

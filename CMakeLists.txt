@@ -145,14 +145,14 @@ if(BUILD_ENCODERS)
                 -DHIGH_BIT_DEPTH=ON
                 -DENABLE_ASSEMBLY=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
-            # Install, then rename binary and library to x265-noopt
+            # Install, then rename binary and library to x265-nonopt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
             COMMAND ${CMAKE_COMMAND} -E rename
                 ${ANICET_INSTALL_DIR}/bin/x265
-                ${ANICET_INSTALL_DIR}/bin/x265-noopt
+                ${ANICET_INSTALL_DIR}/bin/x265-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/lib/libx265.a
-                ${ANICET_INSTALL_DIR}/lib/libx265-noopt.a
+                ${ANICET_INSTALL_DIR}/lib/libx265-nonopt.a
         )
     endif()
 
@@ -252,20 +252,20 @@ if(BUILD_ENCODERS)
                 -DENABLE_STATIC=ON
                 -DWITH_SIMD=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
-            # Install, then rename binaries and libraries to *-noopt
+            # Install libraries, then copy binaries and libraries to *-nonopt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
-            COMMAND ${CMAKE_COMMAND} -E rename
-                ${ANICET_INSTALL_DIR}/bin/cjpeg
-                ${ANICET_INSTALL_DIR}/bin/cjpeg-noopt
-            COMMAND ${CMAKE_COMMAND} -E rename
-                ${ANICET_INSTALL_DIR}/bin/djpeg
-                ${ANICET_INSTALL_DIR}/bin/djpeg-noopt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-nonopt/cjpeg-static
+                ${ANICET_INSTALL_DIR}/bin/cjpeg-nonopt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-nonopt/djpeg-static
+                ${ANICET_INSTALL_DIR}/bin/djpeg-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/lib/libjpeg.a
-                ${ANICET_INSTALL_DIR}/lib/libjpeg-noopt.a
+                ${ANICET_INSTALL_DIR}/lib/libjpeg-nonopt.a
             COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/lib/libturbojpeg.a
-                ${ANICET_INSTALL_DIR}/lib/libturbojpeg-noopt.a
+                ${ANICET_INSTALL_DIR}/lib/libturbojpeg-nonopt.a
         )
     endif()
 
@@ -357,20 +357,20 @@ if(BUILD_ENCODERS)
                 -DWEBP_BUILD_WEBPMUX=OFF
                 -DWEBP_BUILD_EXTRAS=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
-            # Install, then rename binaries and libraries to *-noopt
+            # Install libraries, then copy binaries and libraries to *-nonopt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
-            COMMAND ${CMAKE_COMMAND} -E rename
-                ${ANICET_INSTALL_DIR}/bin/cwebp
-                ${ANICET_INSTALL_DIR}/bin/cwebp-noopt
-            COMMAND ${CMAKE_COMMAND} -E rename
-                ${ANICET_INSTALL_DIR}/bin/dwebp
-                ${ANICET_INSTALL_DIR}/bin/dwebp-noopt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_BINARY_DIR}/libwebp-build-nonopt/cwebp
+                ${ANICET_INSTALL_DIR}/bin/cwebp-nonopt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_BINARY_DIR}/libwebp-build-nonopt/dwebp
+                ${ANICET_INSTALL_DIR}/bin/dwebp-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/lib/libwebp.a
-                ${ANICET_INSTALL_DIR}/lib/libwebp-noopt.a
+                ${ANICET_INSTALL_DIR}/lib/libwebp-nonopt.a
             COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/lib/libsharpyuv.a
-                ${ANICET_INSTALL_DIR}/lib/libsharpyuv-noopt.a
+                ${ANICET_INSTALL_DIR}/lib/libsharpyuv-nonopt.a
         )
     endif()
 endif()

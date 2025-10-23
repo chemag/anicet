@@ -451,12 +451,12 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
 }
 
 // x265 encoder (non-optimized) - uses CLI tool to avoid symbol conflicts
-// Note: Both libx265.a and libx265-noopt.a export the same symbols,
-// so we cannot link both into the same binary. Use the x265-noopt CLI tool
+// Note: Both libx265.a and libx265-nonopt.a export the same symbols,
+// so we cannot link both into the same binary. Use the x265-nonopt CLI tool
 // instead.
-int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
-                          int height, int width, const char* color_format,
-                          uint8_t* output_buffer, size_t* output_size) {
+int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
+                           int height, int width, const char* color_format,
+                           uint8_t* output_buffer, size_t* output_size) {
   (void)color_format;  // Unused (yuv420p assumed)
 
   // Validate inputs
@@ -471,11 +471,11 @@ int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
   char input_temp[] = "/tmp/anicet_x265_XXXXXX.yuv";
   int input_fd = mkstemps(input_temp, 4);
   if (input_fd < 0) {
-    fprintf(stderr, "x265-noopt: Failed to create temp input file\n");
+    fprintf(stderr, "x265-nonopt: Failed to create temp input file\n");
     return -1;
   }
   if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
-    fprintf(stderr, "x265-noopt: Failed to write temp input file\n");
+    fprintf(stderr, "x265-nonopt: Failed to write temp input file\n");
     close(input_fd);
     unlink(input_temp);
     return -1;
@@ -486,16 +486,16 @@ int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
   char output_temp[] = "/tmp/anicet_x265_XXXXXX.hevc";
   int output_fd = mkstemps(output_temp, 5);
   if (output_fd < 0) {
-    fprintf(stderr, "x265-noopt: Failed to create temp output file\n");
+    fprintf(stderr, "x265-nonopt: Failed to create temp output file\n");
     unlink(input_temp);
     return -1;
   }
   close(output_fd);
 
-  // Call x265-noopt CLI tool
+  // Call x265-nonopt CLI tool
   char command[1024];
   snprintf(command, sizeof(command),
-           "x265-noopt --input %s --input-res %dx%d --fps 1 --frames 1 "
+           "x265-nonopt --input %s --input-res %dx%d --fps 1 --frames 1 "
            "--output %s --log-level error 2>&1",
            input_temp, width, height, output_temp);
 
@@ -503,7 +503,7 @@ int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
   unlink(input_temp);
 
   if (ret != 0) {
-    fprintf(stderr, "x265-noopt: CLI tool failed with exit code %d\n", ret);
+    fprintf(stderr, "x265-nonopt: CLI tool failed with exit code %d\n", ret);
     unlink(output_temp);
     return -1;
   }
@@ -511,7 +511,7 @@ int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
   // Read output file
   FILE* out_fp = fopen(output_temp, "rb");
   if (!out_fp) {
-    fprintf(stderr, "x265-noopt: Failed to open output file\n");
+    fprintf(stderr, "x265-nonopt: Failed to open output file\n");
     unlink(output_temp);
     return -1;
   }
@@ -521,7 +521,8 @@ int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
   fseek(out_fp, 0, SEEK_SET);
 
   if (file_size < 0 || (size_t)file_size > max_output_size) {
-    fprintf(stderr, "x265-noopt: Output too large (%ld bytes, %zu available)\n",
+    fprintf(stderr,
+            "x265-nonopt: Output too large (%ld bytes, %zu available)\n",
             file_size, max_output_size);
     fclose(out_fp);
     unlink(output_temp);
@@ -533,7 +534,7 @@ int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
   unlink(output_temp);
 
   if (bytes_read != (size_t)file_size) {
-    fprintf(stderr, "x265-noopt: Failed to read output file\n");
+    fprintf(stderr, "x265-nonopt: Failed to read output file\n");
     return -1;
   }
 
@@ -543,10 +544,11 @@ int anicet_run_x265_noopt(const uint8_t* input_buffer, size_t input_size,
 
 // libjpeg-turbo encoder (non-optimized) - uses CLI tool to avoid symbol
 // conflicts
-int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
-                                  size_t input_size, int height, int width,
-                                  const char* color_format,
-                                  uint8_t* output_buffer, size_t* output_size) {
+int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
+                                   size_t input_size, int height, int width,
+                                   const char* color_format,
+                                   uint8_t* output_buffer,
+                                   size_t* output_size) {
   (void)height;        // Used in command line
   (void)width;         // Used in command line
   (void)color_format;  // Unused (yuv420p assumed)
@@ -563,11 +565,11 @@ int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
   char input_temp[] = "/tmp/anicet_jpeg_XXXXXX.yuv";
   int input_fd = mkstemps(input_temp, 4);
   if (input_fd < 0) {
-    fprintf(stderr, "libjpeg-turbo-noopt: Failed to create temp input file\n");
+    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to create temp input file\n");
     return -1;
   }
   if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
-    fprintf(stderr, "libjpeg-turbo-noopt: Failed to write temp input file\n");
+    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to write temp input file\n");
     close(input_fd);
     unlink(input_temp);
     return -1;
@@ -578,24 +580,25 @@ int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
   char output_temp[] = "/tmp/anicet_jpeg_XXXXXX.jpg";
   int output_fd = mkstemps(output_temp, 4);
   if (output_fd < 0) {
-    fprintf(stderr, "libjpeg-turbo-noopt: Failed to create temp output file\n");
+    fprintf(stderr,
+            "libjpeg-turbo-nonopt: Failed to create temp output file\n");
     unlink(input_temp);
     return -1;
   }
   close(output_fd);
 
-  // Call cjpeg-noopt CLI tool
+  // Call cjpeg-nonopt CLI tool
   // cjpeg reads raw image data from stdin or file
   char command[1024];
   snprintf(command, sizeof(command),
-           "cjpeg-noopt -quality 75 -outfile %s -rgb -imgfmt yuv420 %s 2>&1",
+           "cjpeg-nonopt -quality 75 -outfile %s -rgb -imgfmt yuv420 %s 2>&1",
            output_temp, input_temp);
 
   int ret = system(command);
   unlink(input_temp);
 
   if (ret != 0) {
-    fprintf(stderr, "libjpeg-turbo-noopt: CLI tool failed with exit code %d\n",
+    fprintf(stderr, "libjpeg-turbo-nonopt: CLI tool failed with exit code %d\n",
             ret);
     unlink(output_temp);
     return -1;
@@ -604,7 +607,7 @@ int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
   // Read output file
   FILE* out_fp = fopen(output_temp, "rb");
   if (!out_fp) {
-    fprintf(stderr, "libjpeg-turbo-noopt: Failed to open output file\n");
+    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to open output file\n");
     unlink(output_temp);
     return -1;
   }
@@ -616,7 +619,7 @@ int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
   if (file_size < 0 || (size_t)file_size > max_output_size) {
     fprintf(
         stderr,
-        "libjpeg-turbo-noopt: Output too large (%ld bytes, %zu available)\n",
+        "libjpeg-turbo-nonopt: Output too large (%ld bytes, %zu available)\n",
         file_size, max_output_size);
     fclose(out_fp);
     unlink(output_temp);
@@ -628,7 +631,7 @@ int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
   unlink(output_temp);
 
   if (bytes_read != (size_t)file_size) {
-    fprintf(stderr, "libjpeg-turbo-noopt: Failed to read output file\n");
+    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to read output file\n");
     return -1;
   }
 
@@ -637,9 +640,9 @@ int anicet_run_libjpegturbo_noopt(const uint8_t* input_buffer,
 }
 
 // WebP encoder (non-optimized) - uses CLI tool to avoid symbol conflicts
-int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
-                          int height, int width, const char* color_format,
-                          uint8_t* output_buffer, size_t* output_size) {
+int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
+                           int height, int width, const char* color_format,
+                           uint8_t* output_buffer, size_t* output_size) {
   (void)height;        // Used in command line
   (void)width;         // Used in command line
   (void)color_format;  // Unused (yuv420p assumed)
@@ -656,11 +659,11 @@ int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
   char input_temp[] = "/tmp/anicet_webp_XXXXXX.yuv";
   int input_fd = mkstemps(input_temp, 4);
   if (input_fd < 0) {
-    fprintf(stderr, "webp-noopt: Failed to create temp input file\n");
+    fprintf(stderr, "webp-nonopt: Failed to create temp input file\n");
     return -1;
   }
   if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
-    fprintf(stderr, "webp-noopt: Failed to write temp input file\n");
+    fprintf(stderr, "webp-nonopt: Failed to write temp input file\n");
     close(input_fd);
     unlink(input_temp);
     return -1;
@@ -671,22 +674,22 @@ int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
   char output_temp[] = "/tmp/anicet_webp_XXXXXX.webp";
   int output_fd = mkstemps(output_temp, 5);
   if (output_fd < 0) {
-    fprintf(stderr, "webp-noopt: Failed to create temp output file\n");
+    fprintf(stderr, "webp-nonopt: Failed to create temp output file\n");
     unlink(input_temp);
     return -1;
   }
   close(output_fd);
 
-  // Call cwebp-noopt CLI tool
+  // Call cwebp-nonopt CLI tool
   char command[1024];
-  snprintf(command, sizeof(command), "cwebp-noopt -q 75 %s -o %s 2>&1",
+  snprintf(command, sizeof(command), "cwebp-nonopt -q 75 %s -o %s 2>&1",
            input_temp, output_temp);
 
   int ret = system(command);
   unlink(input_temp);
 
   if (ret != 0) {
-    fprintf(stderr, "webp-noopt: CLI tool failed with exit code %d\n", ret);
+    fprintf(stderr, "webp-nonopt: CLI tool failed with exit code %d\n", ret);
     unlink(output_temp);
     return -1;
   }
@@ -694,7 +697,7 @@ int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
   // Read output file
   FILE* out_fp = fopen(output_temp, "rb");
   if (!out_fp) {
-    fprintf(stderr, "webp-noopt: Failed to open output file\n");
+    fprintf(stderr, "webp-nonopt: Failed to open output file\n");
     unlink(output_temp);
     return -1;
   }
@@ -704,7 +707,8 @@ int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
   fseek(out_fp, 0, SEEK_SET);
 
   if (file_size < 0 || (size_t)file_size > max_output_size) {
-    fprintf(stderr, "webp-noopt: Output too large (%ld bytes, %zu available)\n",
+    fprintf(stderr,
+            "webp-nonopt: Output too large (%ld bytes, %zu available)\n",
             file_size, max_output_size);
     fclose(out_fp);
     unlink(output_temp);
@@ -716,7 +720,7 @@ int anicet_run_webp_noopt(const uint8_t* input_buffer, size_t input_size,
   unlink(output_temp);
 
   if (bytes_read != (size_t)file_size) {
-    fprintf(stderr, "webp-noopt: Failed to read output file\n");
+    fprintf(stderr, "webp-nonopt: Failed to read output file\n");
     return -1;
   }
 
@@ -799,14 +803,14 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   // Determine which codecs to run
   bool run_all = (strcmp(codec_name, "all") == 0);
   bool run_webp = run_all || (strcmp(codec_name, "webp") == 0);
-  bool run_webp_noopt = (strcmp(codec_name, "webp-noopt") == 0);
+  bool run_webp_nonopt = (strcmp(codec_name, "webp-nonopt") == 0);
   bool run_libjpeg_turbo =
       run_all || (strcmp(codec_name, "libjpeg-turbo") == 0);
-  bool run_libjpeg_turbo_noopt =
-      (strcmp(codec_name, "libjpeg-turbo-noopt") == 0);
+  bool run_libjpeg_turbo_nonopt =
+      (strcmp(codec_name, "libjpeg-turbo-nonopt") == 0);
   bool run_jpegli = run_all || (strcmp(codec_name, "jpegli") == 0);
   bool run_x265 = run_all || (strcmp(codec_name, "x265") == 0);
-  bool run_x265_noopt = (strcmp(codec_name, "x265-noopt") == 0);
+  bool run_x265_nonopt = (strcmp(codec_name, "x265-nonopt") == 0);
   bool run_svtav1 = run_all || (strcmp(codec_name, "svt-av1") == 0);
   bool run_mediacodec = run_all || (strcmp(codec_name, "mediacodec") == 0);
 
@@ -836,16 +840,16 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     }
   }
 
-  // 1b. WebP encoding (noopt)
-  if (run_webp_noopt) {
-    printf("\n--- WebP (noopt) ---\n");
+  // 1b. WebP encoding (nonopt)
+  if (run_webp_nonopt) {
+    printf("\n--- WebP (nonopt) ---\n");
     size_t output_size = output_buffer_size;
-    if (anicet_run_webp_noopt(buffer, buf_size, height, width, color_format,
-                              output_buffer, &output_size) == 0) {
-      printf("WebP (noopt): Encoded to %zu bytes (%.2f%% of original)\n",
+    if (anicet_run_webp_nonopt(buffer, buf_size, height, width, color_format,
+                               output_buffer, &output_size) == 0) {
+      printf("WebP (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
-      fprintf(stderr, "WebP (noopt): Encoding failed\n");
+      fprintf(stderr, "WebP (nonopt): Encoding failed\n");
       errors++;
     }
   }
@@ -864,17 +868,17 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     }
   }
 
-  // 2b. libjpeg-turbo encoding (noopt)
-  if (run_libjpeg_turbo_noopt) {
-    printf("\n--- libjpeg-turbo (noopt) ---\n");
+  // 2b. libjpeg-turbo encoding (nonopt)
+  if (run_libjpeg_turbo_nonopt) {
+    printf("\n--- libjpeg-turbo (nonopt) ---\n");
     size_t output_size = output_buffer_size;
-    if (anicet_run_libjpegturbo_noopt(buffer, buf_size, height, width,
-                                      color_format, output_buffer,
-                                      &output_size) == 0) {
-      printf("TurboJPEG (noopt): Encoded to %zu bytes (%.2f%% of original)\n",
+    if (anicet_run_libjpegturbo_nonopt(buffer, buf_size, height, width,
+                                       color_format, output_buffer,
+                                       &output_size) == 0) {
+      printf("TurboJPEG (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
-      fprintf(stderr, "TurboJPEG (noopt): Encoding failed\n");
+      fprintf(stderr, "TurboJPEG (nonopt): Encoding failed\n");
       errors++;
     }
   }
@@ -907,16 +911,16 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     }
   }
 
-  // 4b. x265 (H.265/HEVC) encoding (noopt)
-  if (run_x265_noopt) {
-    printf("\n--- x265 (H.265/HEVC) (noopt) ---\n");
+  // 4b. x265 (H.265/HEVC) encoding (nonopt)
+  if (run_x265_nonopt) {
+    printf("\n--- x265 (H.265/HEVC) (nonopt) ---\n");
     size_t output_size = output_buffer_size;
-    if (anicet_run_x265_noopt(buffer, buf_size, height, width, color_format,
-                              output_buffer, &output_size) == 0) {
-      printf("x265 (noopt): Encoded to %zu bytes (%.2f%% of original)\n",
+    if (anicet_run_x265_nonopt(buffer, buf_size, height, width, color_format,
+                               output_buffer, &output_size) == 0) {
+      printf("x265 (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
-      fprintf(stderr, "x265 (noopt): Encoding failed\n");
+      fprintf(stderr, "x265 (nonopt): Encoding failed\n");
       errors++;
     }
   }

@@ -206,9 +206,9 @@ static void print_help(const char* argv0) {
       "  --width N                Image width in pixels\n"
       "  --height N               Image height in pixels\n"
       "  --color-format FORMAT    Color format (e.g., yuv420p)\n"
-      "  --codec CODEC            Codec to use: x265, x265-noopt, svt-av1,\n"
-      "                           libjpeg-turbo, libjpeg-turbo-noopt, jpegli,\n"
-      "                           webp, webp-noopt, mediacodec, all (default: all)\n"
+      "  --codec CODEC            Codec to use: x265, x265-nonopt, svt-av1,\n"
+      "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
+      "                           webp, webp-nonopt, mediacodec, all (default: all)\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
@@ -338,8 +338,8 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       opt.codec = argv[++i];
       // Validate codec name
       std::set<std::string> valid_codecs = {
-        "x265", "x265-noopt", "svt-av1", "libjpeg-turbo",
-        "libjpeg-turbo-noopt", "jpegli", "webp", "webp-noopt",
+        "x265", "x265-nonopt", "svt-av1", "libjpeg-turbo",
+        "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
         "mediacodec", "all"
       };
       if (valid_codecs.find(opt.codec) == valid_codecs.end()) {
