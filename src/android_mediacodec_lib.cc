@@ -21,23 +21,7 @@
 
 #define DEFAULT_QUALITY 80
 
-// Android MediaCodec color-format constants (subset)
-#ifndef COLOR_FormatYUV420Planar
-#define COLOR_FormatYUV420Planar 19  // I420
-#endif
-#ifndef COLOR_FormatYUV420SemiPlanar
-#define COLOR_FormatYUV420SemiPlanar \
-  21  // NV12 or NV21 (depends on UV order you pack)
-#endif
-#ifndef COLOR_FormatYUV420PackedPlanar
-#define COLOR_FormatYUV420PackedPlanar 0x14  // 20
-#endif
-#ifndef COLOR_FormatYUV420PackedSemiPlanar
-#define COLOR_FormatYUV420PackedSemiPlanar 0x27  // 39
-#endif
-#ifndef COLOR_FormatYUV420Flexible
-#define COLOR_FormatYUV420Flexible 0x7F420888
-#endif
+// Color format constants are now defined in android_mediacodec_lib.h
 
 // Global debug level (set in encode function)
 static int g_debug_level = 0;
@@ -75,11 +59,12 @@ static double get_timestamp_s() {
 #endif
 
 // Helper: Calculate frame size based on color format
-static size_t get_frame_size(const std::string& color_format, int width,
-                             int height) {
+// Public helper: Calculate frame size based on color format and dimensions
+size_t android_mediacodec_get_frame_size(const char* color_format, int width,
+                                         int height) {
+  std::string fmt(color_format);
   // Calculate frame size based on color format
-  if (color_format == "yuv420p" || color_format == "nv12" ||
-      color_format == "nv21") {
+  if (fmt == "yuv420p" || fmt == "nv12" || fmt == "nv21") {
     // YUV420: 1.5 bytes per pixel (Y + U/4 + V/4)
     return width * height * 3 / 2;
   }
@@ -87,8 +72,16 @@ static size_t get_frame_size(const std::string& color_format, int width,
   return 0;
 }
 
-// Helper: Convert color format string to MediaCodec color format constant
-static int32_t get_color_format(const std::string& format) {
+// Internal wrapper for C++ code
+static size_t get_frame_size(const std::string& color_format, int width,
+                             int height) {
+  return android_mediacodec_get_frame_size(color_format.c_str(), width, height);
+}
+
+// Public helper: Convert color format string to MediaCodec color format
+// constant
+int android_mediacodec_get_color_format(const char* color_format) {
+  std::string format(color_format);
   // Planar 4:2:0 (I420, aka yuv420p)
   if (format == "yuv420p" || format == "i420" || format == "iyuv") {
     return COLOR_FormatYUV420Planar;  // 19
@@ -120,8 +113,13 @@ static int32_t get_color_format(const std::string& format) {
   return COLOR_FormatYUV420Planar;  // 19
 }
 
-// Helper: Calculate bitrate from quality (simple heuristic)
-static int calculate_bitrate(int quality, int width, int height) {
+// Internal wrapper for C++ code
+static int32_t get_color_format(const std::string& format) {
+  return android_mediacodec_get_color_format(format.c_str());
+}
+
+// Public helper: Calculate bitrate from quality (0-100) and frame dimensions
+int android_mediacodec_calculate_bitrate(int quality, int width, int height) {
   // ensure quality makes sense
   if (quality < 0 || quality > 100) {
     quality = DEFAULT_QUALITY;
@@ -139,6 +137,14 @@ static int calculate_bitrate(int quality, int width, int height) {
 
   return (int)(pps * bpp);
 }
+
+// Internal wrapper for C++ code
+static int calculate_bitrate(int quality, int width, int height) {
+  return android_mediacodec_calculate_bitrate(quality, width, height);
+}
+
+// Note: android_mediacodec_cleanup_binder() is implemented in
+// android_binder_init.h
 
 // Helper: Configure AMediaFormat with encoding parameters
 static void set_amediaformat(AMediaFormat* format, const char* mime_type,
@@ -208,6 +214,10 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
     fprintf(stderr, "MediaCodec may not work correctly\n");
   } else {
     DEBUG(1, "Binder thread pool initialized successfully");
+    // Give the media server a brief moment to stabilize after binder connection
+    // This helps prevent aborts when the media server is still cleaning up from
+    // previous client disconnections
+    usleep(20000);  // 20ms delay
   }
 
   // 1. set codec format
@@ -242,11 +252,26 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
         bitrate_local, fmt->frame_count);
 
   // 2. create codec
-  DEBUG(1, "Creating codec: AMediaCodec_createCodecByName(%s)",
-        fmt->codec_name);
-  AMediaCodec* codec = AMediaCodec_createCodecByName(fmt->codec_name);
+  // Retry codec creation to handle transient media server issues
+  // Sometimes the media server is in a bad state from previous client
+  // disconnections
+  AMediaCodec* codec = nullptr;
+  const int max_retries = 3;
+  for (int attempt = 0; attempt < max_retries && !codec; attempt++) {
+    if (attempt > 0) {
+      DEBUG(1, "Retry %d/%d: Waiting 50ms before retrying codec creation...",
+            attempt, max_retries - 1);
+      usleep(50000);  // 50ms delay before retry
+    }
+    DEBUG(1,
+          "Creating codec: AMediaCodec_createCodecByName(%s) (attempt %d/%d)",
+          fmt->codec_name, attempt + 1, max_retries);
+    codec = AMediaCodec_createCodecByName(fmt->codec_name);
+  }
+
   if (!codec) {
-    fprintf(stderr, "Error: Cannot create codec: %s\n", fmt->codec_name);
+    fprintf(stderr, "Error: Cannot create codec after %d attempts: %s\n",
+            max_retries, fmt->codec_name);
     AMediaFormat_delete(format);
     return 1;
   }
@@ -481,9 +506,16 @@ void android_mediacodec_encode_cleanup(AMediaCodec* codec, int debug_level) {
   DEBUG(2, "Deleting codec...");
   AMediaCodec_delete(codec);
 
-  // Stop binder thread AFTER codec is deleted
-  // (codec deletion needs binder thread for cleanup messages)
-  stop_binder_thread_pool();
+  // NOTE: We do NOT stop the binder thread pool here!
+  // The binder thread pool is a process-wide resource that should remain
+  // active for the lifetime of the application. Stopping it after each encode
+  // would break subsequent encode operations in the same process.
+  //
+  // The binder thread will be automatically cleaned up by the OS when the
+  // process exits. Attempting to manually stop it (e.g., via atexit handlers)
+  // creates race conditions where the media server or lingering callbacks try
+  // to access already-destroyed mutexes, leading to crashes or corruption.
+  // Letting the kernel handle cleanup is the safest approach.
 }
 
 // Full all-in-one encode function (convenience wrapper)
@@ -543,6 +575,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 void android_mediacodec_encode_cleanup(AMediaCodec* codec, int debug_level) {
   (void)codec;
   (void)debug_level;
+  // Stub - nothing to do on non-Android platforms
 }
 
 int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,

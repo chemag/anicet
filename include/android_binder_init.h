@@ -46,10 +46,18 @@ static void* g_ipc_state = nullptr;
 
 // Function pointer types
 typedef void (*StopProcessFn)(void*);
+typedef void (*FlushCommandsFn)(void*);
 
 // Try using IPCThreadState::self()->joinThreadPool() in a background thread
 // This is simpler and avoids ProcessState::init() ABI issues
+// NOTE: This is idempotent - if already initialized, returns true immediately
 inline bool init_binder_thread_pool(int debug_level = 0) {
+  // If already initialized, just return success
+  if (g_binder_thread != 0) {
+    BINDER_DEBUG(debug_level, 2, "Binder thread already initialized");
+    return true;
+  }
+
   BINDER_DEBUG(debug_level, 1,
                "Attempting alternative binder initialization...");
   g_binder_debug_level = debug_level;
@@ -111,8 +119,34 @@ inline bool init_binder_thread_pool(int debug_level = 0) {
   return false;
 }
 
-// Stop binder thread - call stopProcess and join the thread
-inline void stop_binder_thread_pool() {
+// Flush pending binder commands to ensure clean communication with media server
+// Call this after MediaCodec operations to ensure all commands are sent before
+// exit
+inline void android_mediacodec_flush_binder() {
+  if (g_ipc_state) {
+    void* handle = dlopen("libbinder.so", RTLD_NOW | RTLD_GLOBAL);
+    if (handle) {
+      FlushCommandsFn flush_commands = (FlushCommandsFn)dlsym(
+          handle, "_ZN7android14IPCThreadState13flushCommandsEv");
+
+      if (flush_commands) {
+        BINDER_DEBUG(g_binder_debug_level, 2,
+                     "Flushing pending binder commands...");
+        flush_commands(g_ipc_state);
+        BINDER_DEBUG(g_binder_debug_level, 2, "Flush complete");
+
+        // Delay to let media server process the flushed commands and send
+        // responses This reduces "Driver did not consume write buffer" warnings
+        usleep(30000);  // 30ms
+      }
+    }
+  }
+}
+
+// Cleanup binder thread at program exit - call stopProcess and join the thread
+// This should only be called when shutting down the entire process, not between
+// encodes
+inline void android_mediacodec_cleanup_binder() {
   if (g_binder_thread != 0) {
     BINDER_DEBUG(g_binder_debug_level, 2, "Stopping binder thread...");
 
@@ -149,8 +183,22 @@ inline void stop_binder_thread_pool() {
     g_binder_thread = 0;
     g_ipc_state = nullptr;
     BINDER_DEBUG(g_binder_debug_level, 2, "Binder thread cleanup complete");
+
+    // Give the media server a brief moment to finish any pending operations
+    // This helps avoid "getAndExecuteCommand returned error" messages when
+    // the server tries to send responses to an already-closed connection
+    usleep(10000);  // 10ms delay
   }
 }
+
+// Deprecated name for backward compatibility
+inline void stop_binder_thread_pool() { android_mediacodec_cleanup_binder(); }
+
+#else  // !__ANDROID__
+
+// Stubs for non-Android platforms
+inline void android_mediacodec_flush_binder() {}
+inline void android_mediacodec_cleanup_binder() {}
 
 #endif  // __ANDROID__
 #endif  // BINDER_INIT_H

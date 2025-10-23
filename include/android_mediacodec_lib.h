@@ -8,9 +8,42 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Include binder initialization for cleanup function
+#include "android_binder_init.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// Android MediaCodec color-format constants (subset)
+// These match MediaCodecInfo.CodecCapabilities color formats.
+#ifndef COLOR_FormatYUV420Planar
+#define COLOR_FormatYUV420Planar 19  // I420
+#endif
+#ifndef COLOR_FormatYUV420SemiPlanar
+#define COLOR_FormatYUV420SemiPlanar 21  // NV12 or NV21
+#endif
+#ifndef COLOR_FormatYUV420PackedPlanar
+#define COLOR_FormatYUV420PackedPlanar 0x14  // 20
+#endif
+#ifndef COLOR_FormatYUV420PackedSemiPlanar
+#define COLOR_FormatYUV420PackedSemiPlanar 0x27  // 39
+#endif
+#ifndef COLOR_FormatYUV420Flexible
+#define COLOR_FormatYUV420Flexible 0x7F420888
+#endif
+
+// Helper functions for MediaCodec encoding
+
+// Calculate frame size based on color format and dimensions
+size_t android_mediacodec_get_frame_size(const char* color_format, int width,
+                                         int height);
+
+// Convert color format string to MediaCodec color format constant
+int android_mediacodec_get_color_format(const char* color_format);
+
+// Calculate bitrate from quality (0-100) and frame dimensions
+int android_mediacodec_calculate_bitrate(int quality, int width, int height);
 
 // MediaCodec encoding format configuration
 typedef struct {

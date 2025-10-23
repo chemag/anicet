@@ -24,6 +24,9 @@
 // Encoder experiment runner
 #include "anicet_runner.h"
 
+// Android MediaCodec library for binder cleanup
+#include "android_mediacodec_lib.h"
+
 
 // small utilities
 static long now_ms_monotonic() {
@@ -476,6 +479,16 @@ int main(int argc, char** argv) {
       if (first) printf("run=na");
       printf(",wall_ms=%ld,exit=%d\n", wall_ms, result);
     }
+
+    // Flush pending binder commands to ensure clean shutdown
+    // This ensures all MediaCodec cleanup commands are sent to the media server
+    // before the process exits, reducing the chance of leaving the media server
+    // in a bad state that could affect the next process invocation.
+    android_mediacodec_flush_binder();
+
+    // NOTE: We do NOT call android_mediacodec_cleanup_binder() here.
+    // Stopping the binder thread can cause race conditions. Instead, we just
+    // flush commands and let the OS clean up the thread when the process exits.
 
     return result;
   }

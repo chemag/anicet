@@ -27,24 +27,7 @@
 
 #define DEFAULT_QUALITY 80
 
-// Android MediaCodec color-format constants (subset)
-// These match MediaCodecInfo.CodecCapabilities color formats.
-#ifndef COLOR_FormatYUV420Planar
-#define COLOR_FormatYUV420Planar 19  // I420
-#endif
-#ifndef COLOR_FormatYUV420SemiPlanar
-#define COLOR_FormatYUV420SemiPlanar \
-  21  // NV12 or NV21 (depends on UV order you pack)
-#endif
-#ifndef COLOR_FormatYUV420PackedPlanar
-#define COLOR_FormatYUV420PackedPlanar 0x14  // 20
-#endif
-#ifndef COLOR_FormatYUV420PackedSemiPlanar
-#define COLOR_FormatYUV420PackedSemiPlanar 0x27  // 39
-#endif
-#ifndef COLOR_FormatYUV420Flexible
-#define COLOR_FormatYUV420Flexible 0x7F420888
-#endif
+// Color format constants are now defined in android_mediacodec_lib.h
 
 struct Options {
   std::string codec_name;
@@ -244,18 +227,6 @@ static bool parse_args(int argc, char** argv, Options& opt) {
   return true;
 }
 
-static size_t get_frame_size(const std::string& color_format, const int& width,
-                             const int& height) {
-  // Calculate frame size based on color format
-  if (color_format == "yuv420p" || color_format == "nv12" ||
-      color_format == "nv21") {
-    // YUV420: 1.5 bytes per pixel (Y + U/4 + V/4)
-    return width * height * 3 / 2;
-  }
-  // Add more formats as needed
-  return 0;
-}
-
 #ifdef __ANDROID__
 
 // Codec listing using dumpsys media.player
@@ -322,58 +293,7 @@ static int list_codecs_cmd(const Options& opt) {
   return 0;
 }
 
-// Convert color format string to MediaCodec color format constant
-static int32_t get_color_format(const std::string& format) {
-  // Planar 4:2:0 (I420, aka yuv420p)
-  if (format == "yuv420p" || format == "i420" || format == "iyuv") {
-    return COLOR_FormatYUV420Planar;  // 19
-  }
-
-  // Semiplanar 4:2:0 (NV12 or NV21 share the SAME id; you control the UV order
-  // in your bytes)
-  // - NV12 -> UVUV...
-  // - NV21 -> VUVU...
-  if (format == "nv12" || format == "nv21" || format == "yuv420sp" ||
-      format == "yuv420spsemi") {
-    return COLOR_FormatYUV420SemiPlanar;  // 21
-  }
-
-  // Packed variants (rare; only use if dumpsys says the encoder supports them)
-  if (format == "yuv420packedplanar") {
-    return COLOR_FormatYUV420PackedPlanar;  // 20
-  }
-  if (format == "yuv420packedsemiplanar") {
-    return COLOR_FormatYUV420PackedSemiPlanar;  // 39
-  }
-
-  // Only choose Flexible if you explicitly asked for it.
-  if (format == "yuv420flexible" || format == "flex" || format == "flexible") {
-    return COLOR_FormatYUV420Flexible;  // 0x7F420888
-  }
-
-  // Safe default for buffer input: planar I420
-  return COLOR_FormatYUV420Planar;  // 19
-}
-
-// Calculate bitrate from quality (simple heuristic)
-static int calculate_bitrate(int quality, int width, int height) {
-  // ensure quality makes sense
-  if (quality < 0 || quality > 100) {
-    quality = DEFAULT_QUALITY;
-  }
-
-  // Pixels per second
-  // TODO(chema): fix bitrate usage for images
-  // * default is quality parameter
-  // * try CQ (advertised or not)
-  int64_t pps = (int64_t)width * height * 30 /* frame_rate */;
-
-  // Bits per pixel based on quality
-  // Low quality: ~0.05 bpp, High quality: ~0.25 bpp
-  double bpp = 0.05 + (quality / 100.0) * 0.20;
-
-  return (int)(pps * bpp);
-}
+// Helper functions are now provided by android_mediacodec_lib.h
 
 void set_amediaformat(AMediaFormat* format, const char* mime_type,
                       const int& width, const int& height,
@@ -397,7 +317,7 @@ void set_amediaformat(AMediaFormat* format, const char* mime_type,
   DEBUG(2, "AMediaFormat_setInt32(format, \"slice-height\", %d);", height);
 #endif
 
-  int32_t color_fmt = get_color_format(color_format);
+  int32_t color_fmt = android_mediacodec_get_color_format(color_format.c_str());
   DEBUG(1, "Setting color-format to %d (%s)", color_fmt, color_format.c_str());
   AMediaFormat_setInt32(format, "color-format", color_fmt);
   DEBUG(2, "AMediaFormat_setInt32(format, \"color-format\", %d);", color_fmt);
@@ -419,8 +339,8 @@ void set_amediaformat(AMediaFormat* format, const char* mime_type,
   // TODO(chema): reconsider this
   // Set bitrate
   if (*bitrate < 0) {
-    *bitrate = calculate_bitrate((quality >= 0) ? quality : DEFAULT_QUALITY,
-                                 width, height);
+    *bitrate = android_mediacodec_calculate_bitrate(
+        (quality >= 0) ? quality : DEFAULT_QUALITY, width, height);
   }
   AMediaFormat_setInt32(format, "bitrate", *bitrate);
   DEBUG(2, "AMediaFormat_setInt32(format, \"bitrate\", %d);", *bitrate);
@@ -471,7 +391,8 @@ static int encode_frames(const Options& opt) {
   size_t file_size = st.st_size;
 
   // Calculate size for one frame (we reuse it for all frames)
-  size_t frame_size = get_frame_size(opt.color_format, opt.width, opt.height);
+  size_t frame_size = android_mediacodec_get_frame_size(
+      opt.color_format.c_str(), opt.width, opt.height);
   size_t read_size = frame_size;
   if (file_size < read_size) {
     fprintf(stderr,
