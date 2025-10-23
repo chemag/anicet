@@ -8,10 +8,8 @@
 #include <cstring>
 #include <vector>
 
-// POSIX headers for CLI tool implementations
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+// POSIX headers for dynamic loading
+#include <dlfcn.h>
 
 // Encoder library headers
 #include "android_mediacodec_lib.h"
@@ -450,13 +448,12 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   return result;
 }
 
-// x265 encoder (non-optimized) - uses CLI tool to avoid symbol conflicts
-// Note: Both libx265.a and libx265-nonopt.a export the same symbols,
-// so we cannot link both into the same binary. Use the x265-nonopt CLI tool
-// instead.
+// x265 encoder (non-optimized) - uses dlopen to avoid symbol conflicts
+// Dynamically loads libx265-nonopt.so with RTLD_LOCAL for symbol isolation
 int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
                            uint8_t* output_buffer, size_t* output_size) {
+  (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
   // Validate inputs
@@ -467,90 +464,130 @@ int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
-  // Write input to temporary file
-  char input_temp[] = "/tmp/anicet_x265_XXXXXX.yuv";
-  int input_fd = mkstemps(input_temp, 4);
-  if (input_fd < 0) {
-    fprintf(stderr, "x265-nonopt: Failed to create temp input file\n");
-    return -1;
-  }
-  if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
-    fprintf(stderr, "x265-nonopt: Failed to write temp input file\n");
-    close(input_fd);
-    unlink(input_temp);
-    return -1;
-  }
-  close(input_fd);
-
-  // Create temp output file
-  char output_temp[] = "/tmp/anicet_x265_XXXXXX.hevc";
-  int output_fd = mkstemps(output_temp, 5);
-  if (output_fd < 0) {
-    fprintf(stderr, "x265-nonopt: Failed to create temp output file\n");
-    unlink(input_temp);
-    return -1;
-  }
-  close(output_fd);
-
-  // Call x265-nonopt CLI tool
-  char command[1024];
-  snprintf(command, sizeof(command),
-           "x265-nonopt --input %s --input-res %dx%d --fps 1 --frames 1 "
-           "--output %s --log-level error 2>&1",
-           input_temp, width, height, output_temp);
-
-  int ret = system(command);
-  unlink(input_temp);
-
-  if (ret != 0) {
-    fprintf(stderr, "x265-nonopt: CLI tool failed with exit code %d\n", ret);
-    unlink(output_temp);
+  // Load libx265-nonopt.so with RTLD_LOCAL to isolate symbols
+  void* handle = dlopen("libx265-nonopt.so", RTLD_NOW | RTLD_LOCAL);
+  if (!handle) {
+    fprintf(stderr, "x265-nonopt: Failed to load library: %s\n", dlerror());
     return -1;
   }
 
-  // Read output file
-  FILE* out_fp = fopen(output_temp, "rb");
-  if (!out_fp) {
-    fprintf(stderr, "x265-nonopt: Failed to open output file\n");
-    unlink(output_temp);
+  // Get function pointers
+  typedef x265_param* (*x265_param_alloc_t)();
+  typedef int (*x265_param_default_preset_t)(x265_param*, const char*,
+                                             const char*);
+  typedef x265_encoder* (*x265_encoder_open_t)(x265_param*);
+  typedef x265_picture* (*x265_picture_alloc_t)();
+  typedef void (*x265_picture_init_t)(x265_param*, x265_picture*);
+  typedef int (*x265_encoder_encode_t)(x265_encoder*, x265_nal**, uint32_t*,
+                                       x265_picture*, x265_picture*);
+  typedef void (*x265_picture_free_t)(x265_picture*);
+  typedef void (*x265_encoder_close_t)(x265_encoder*);
+  typedef void (*x265_param_free_t)(x265_param*);
+
+  auto param_alloc = (x265_param_alloc_t)dlsym(handle, "x265_param_alloc");
+  auto param_default_preset =
+      (x265_param_default_preset_t)dlsym(handle, "x265_param_default_preset");
+  auto encoder_open = (x265_encoder_open_t)dlsym(handle, "x265_encoder_open");
+  auto picture_alloc =
+      (x265_picture_alloc_t)dlsym(handle, "x265_picture_alloc");
+  auto picture_init = (x265_picture_init_t)dlsym(handle, "x265_picture_init");
+  auto encoder_encode =
+      (x265_encoder_encode_t)dlsym(handle, "x265_encoder_encode");
+  auto picture_free = (x265_picture_free_t)dlsym(handle, "x265_picture_free");
+  auto encoder_close =
+      (x265_encoder_close_t)dlsym(handle, "x265_encoder_close");
+  auto param_free = (x265_param_free_t)dlsym(handle, "x265_param_free");
+
+  if (!param_alloc || !param_default_preset || !encoder_open ||
+      !picture_alloc || !picture_init || !encoder_encode || !picture_free ||
+      !encoder_close || !param_free) {
+    fprintf(stderr, "x265-nonopt: Failed to load symbols: %s\n", dlerror());
+    dlclose(handle);
     return -1;
   }
 
-  fseek(out_fp, 0, SEEK_END);
-  long file_size = ftell(out_fp);
-  fseek(out_fp, 0, SEEK_SET);
-
-  if (file_size < 0 || (size_t)file_size > max_output_size) {
-    fprintf(stderr,
-            "x265-nonopt: Output too large (%ld bytes, %zu available)\n",
-            file_size, max_output_size);
-    fclose(out_fp);
-    unlink(output_temp);
+  // Now use the library exactly like the optimized version
+  x265_param* param = param_alloc();
+  if (!param) {
+    fprintf(stderr, "x265-nonopt: Failed to allocate parameters\n");
+    dlclose(handle);
     return -1;
   }
 
-  size_t bytes_read = fread(output_buffer, 1, file_size, out_fp);
-  fclose(out_fp);
-  unlink(output_temp);
+  param_default_preset(param, "medium", "zerolatency");
+  param->sourceWidth = width;
+  param->sourceHeight = height;
+  param->fpsNum = 30;
+  param->fpsDenom = 1;
+  param->internalCsp = X265_CSP_I420;
 
-  if (bytes_read != (size_t)file_size) {
-    fprintf(stderr, "x265-nonopt: Failed to read output file\n");
+  x265_encoder* encoder = encoder_open(param);
+  if (!encoder) {
+    fprintf(stderr, "x265-nonopt: Failed to open encoder\n");
+    param_free(param);
+    dlclose(handle);
     return -1;
   }
 
-  *output_size = bytes_read;
-  return 0;
+  x265_picture* pic_in = picture_alloc();
+  picture_init(param, pic_in);
+
+  // Set up picture planes for YUV420
+  pic_in->planes[0] = (void*)input_buffer;
+  pic_in->planes[1] = (void*)(input_buffer + width * height);
+  pic_in->planes[2] =
+      (void*)(input_buffer + width * height + width * height / 4);
+  pic_in->stride[0] = width;
+  pic_in->stride[1] = width / 2;
+  pic_in->stride[2] = width / 2;
+
+  x265_nal* nals = nullptr;
+  uint32_t num_nals = 0;
+  int frame_size = encoder_encode(encoder, &nals, &num_nals, pic_in, nullptr);
+
+  int result = -1;
+  if (frame_size > 0) {
+    // Calculate total size
+    size_t total_size = 0;
+    for (uint32_t i = 0; i < num_nals; i++) {
+      total_size += nals[i].sizeBytes;
+    }
+
+    if (total_size > max_output_size) {
+      fprintf(stderr,
+              "x265-nonopt: Output buffer too small (%zu needed, %zu "
+              "available)\n",
+              total_size, max_output_size);
+    } else {
+      // Copy all NAL units into output buffer
+      size_t offset = 0;
+      for (uint32_t i = 0; i < num_nals; i++) {
+        memcpy(output_buffer + offset, nals[i].payload, nals[i].sizeBytes);
+        offset += nals[i].sizeBytes;
+      }
+      *output_size = total_size;
+      result = 0;
+    }
+  } else {
+    fprintf(stderr, "x265-nonopt: Encoding failed\n");
+  }
+
+  picture_free(pic_in);
+  encoder_close(encoder);
+  param_free(param);
+  dlclose(handle);
+  return result;
 }
 
-// libjpeg-turbo encoder (non-optimized) - uses CLI tool to avoid symbol
-// conflicts
+// libjpeg-turbo encoder (non-optimized) - uses dlopen to avoid symbol
+// conflicts Dynamically loads libturbojpeg-nonopt.so with RTLD_LOCAL for
+// symbol isolation
 int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
                                    size_t input_size, int height, int width,
                                    const char* color_format,
                                    uint8_t* output_buffer,
                                    size_t* output_size) {
-  (void)height;        // Used in command line
-  (void)width;         // Used in command line
+  (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
   // Validate inputs
@@ -561,90 +598,84 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
-  // Write input to temporary file
-  char input_temp[] = "/tmp/anicet_jpeg_XXXXXX.yuv";
-  int input_fd = mkstemps(input_temp, 4);
-  if (input_fd < 0) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to create temp input file\n");
+  // Load libturbojpeg-nonopt.so with RTLD_LOCAL to isolate symbols
+  void* handle = dlopen("libturbojpeg-nonopt.so", RTLD_NOW | RTLD_LOCAL);
+  if (!handle) {
+    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load library: %s\n",
+            dlerror());
     return -1;
   }
-  if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to write temp input file\n");
-    close(input_fd);
-    unlink(input_temp);
+
+  // Get function pointers
+  typedef void* (*tjInitCompress_t)();
+  typedef int (*tjCompressFromYUV_t)(void*, const unsigned char*, int, int, int,
+                                     int, unsigned char**, unsigned long*, int,
+                                     int);
+  typedef char* (*tjGetErrorStr2_t)(void*);
+  typedef void (*tjFree_t)(unsigned char*);
+  typedef int (*tjDestroy_t)(void*);
+
+  auto initCompress = (tjInitCompress_t)dlsym(handle, "tjInitCompress");
+  auto compressFromYUV =
+      (tjCompressFromYUV_t)dlsym(handle, "tjCompressFromYUV");
+  auto getErrorStr2 = (tjGetErrorStr2_t)dlsym(handle, "tjGetErrorStr2");
+  auto tjFreeFunc = (tjFree_t)dlsym(handle, "tjFree");
+  auto tjDestroyFunc = (tjDestroy_t)dlsym(handle, "tjDestroy");
+
+  if (!initCompress || !compressFromYUV || !getErrorStr2 || !tjFreeFunc ||
+      !tjDestroyFunc) {
+    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load symbols: %s\n",
+            dlerror());
+    dlclose(handle);
     return -1;
   }
-  close(input_fd);
 
-  // Create temp output file
-  char output_temp[] = "/tmp/anicet_jpeg_XXXXXX.jpg";
-  int output_fd = mkstemps(output_temp, 4);
-  if (output_fd < 0) {
-    fprintf(stderr,
-            "libjpeg-turbo-nonopt: Failed to create temp output file\n");
-    unlink(input_temp);
+  // Now use the library exactly like the optimized version
+  void* tj_handle = initCompress();
+  if (!tj_handle) {
+    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to initialize compressor\n");
+    dlclose(handle);
     return -1;
   }
-  close(output_fd);
 
-  // Call cjpeg-nonopt CLI tool
-  // cjpeg reads raw image data from stdin or file
-  char command[1024];
-  snprintf(command, sizeof(command),
-           "cjpeg-nonopt -quality 75 -outfile %s -rgb -imgfmt yuv420 %s 2>&1",
-           output_temp, input_temp);
+  unsigned char* jpeg_buf = nullptr;
+  unsigned long jpeg_size = 0;
 
-  int ret = system(command);
-  unlink(input_temp);
-
+  // TJSAMP_420 = 2, TJFLAG_FASTDCT = 2048 (from turbojpeg.h)
+  int ret = compressFromYUV(tj_handle, input_buffer, width, 1, height, 2,
+                            &jpeg_buf, &jpeg_size, 75, 2048);
   if (ret != 0) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: CLI tool failed with exit code %d\n",
-            ret);
-    unlink(output_temp);
+    fprintf(stderr, "libjpeg-turbo-nonopt: Encoding failed: %s\n",
+            getErrorStr2(tj_handle));
+    tjDestroyFunc(tj_handle);
+    dlclose(handle);
     return -1;
   }
 
-  // Read output file
-  FILE* out_fp = fopen(output_temp, "rb");
-  if (!out_fp) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to open output file\n");
-    unlink(output_temp);
-    return -1;
+  int result = 0;
+  if (jpeg_size > max_output_size) {
+    fprintf(stderr,
+            "libjpeg-turbo-nonopt: Output buffer too small (%lu needed, %zu "
+            "available)\n",
+            jpeg_size, max_output_size);
+    result = -1;
+  } else {
+    memcpy(output_buffer, jpeg_buf, jpeg_size);
+    *output_size = jpeg_size;
   }
 
-  fseek(out_fp, 0, SEEK_END);
-  long file_size = ftell(out_fp);
-  fseek(out_fp, 0, SEEK_SET);
-
-  if (file_size < 0 || (size_t)file_size > max_output_size) {
-    fprintf(
-        stderr,
-        "libjpeg-turbo-nonopt: Output too large (%ld bytes, %zu available)\n",
-        file_size, max_output_size);
-    fclose(out_fp);
-    unlink(output_temp);
-    return -1;
-  }
-
-  size_t bytes_read = fread(output_buffer, 1, file_size, out_fp);
-  fclose(out_fp);
-  unlink(output_temp);
-
-  if (bytes_read != (size_t)file_size) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to read output file\n");
-    return -1;
-  }
-
-  *output_size = bytes_read;
-  return 0;
+  tjFreeFunc(jpeg_buf);
+  tjDestroyFunc(tj_handle);
+  dlclose(handle);
+  return result;
 }
 
-// WebP encoder (non-optimized) - uses CLI tool to avoid symbol conflicts
+// WebP encoder (non-optimized) - uses dlopen to avoid symbol conflicts
+// Dynamically loads libwebp-nonopt.so with RTLD_LOCAL for symbol isolation
 int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
                            uint8_t* output_buffer, size_t* output_size) {
-  (void)height;        // Used in command line
-  (void)width;         // Used in command line
+  (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
   // Validate inputs
@@ -655,77 +686,129 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
-  // Write input to temporary file
-  char input_temp[] = "/tmp/anicet_webp_XXXXXX.yuv";
-  int input_fd = mkstemps(input_temp, 4);
-  if (input_fd < 0) {
-    fprintf(stderr, "webp-nonopt: Failed to create temp input file\n");
-    return -1;
-  }
-  if (write(input_fd, input_buffer, input_size) != (ssize_t)input_size) {
-    fprintf(stderr, "webp-nonopt: Failed to write temp input file\n");
-    close(input_fd);
-    unlink(input_temp);
-    return -1;
-  }
-  close(input_fd);
-
-  // Create temp output file
-  char output_temp[] = "/tmp/anicet_webp_XXXXXX.webp";
-  int output_fd = mkstemps(output_temp, 5);
-  if (output_fd < 0) {
-    fprintf(stderr, "webp-nonopt: Failed to create temp output file\n");
-    unlink(input_temp);
-    return -1;
-  }
-  close(output_fd);
-
-  // Call cwebp-nonopt CLI tool
-  char command[1024];
-  snprintf(command, sizeof(command), "cwebp-nonopt -q 75 %s -o %s 2>&1",
-           input_temp, output_temp);
-
-  int ret = system(command);
-  unlink(input_temp);
-
-  if (ret != 0) {
-    fprintf(stderr, "webp-nonopt: CLI tool failed with exit code %d\n", ret);
-    unlink(output_temp);
+  // Load libwebp-nonopt.so with RTLD_LOCAL to isolate symbols
+  void* handle = dlopen("libwebp-nonopt.so", RTLD_NOW | RTLD_LOCAL);
+  if (!handle) {
+    fprintf(stderr, "webp-nonopt: Failed to load library: %s\n", dlerror());
     return -1;
   }
 
-  // Read output file
-  FILE* out_fp = fopen(output_temp, "rb");
-  if (!out_fp) {
-    fprintf(stderr, "webp-nonopt: Failed to open output file\n");
-    unlink(output_temp);
+  // Get function pointers
+  // Note: WebPConfigInit and WebPPictureInit are macros that call *Internal
+  // functions
+  typedef int (*WebPConfigInitInternal_t)(WebPConfig*, int, int);
+  typedef int (*WebPPictureInitInternal_t)(WebPPicture*, int);
+  typedef int (*WebPPictureAlloc_t)(WebPPicture*);
+  typedef void (*WebPPictureFree_t)(WebPPicture*);
+  typedef void (*WebPMemoryWriterInit_t)(WebPMemoryWriter*);
+  typedef int (*WebPMemoryWrite_t)(const uint8_t*, size_t, const WebPPicture*);
+  typedef void (*WebPMemoryWriterClear_t)(WebPMemoryWriter*);
+  typedef int (*WebPEncode_t)(const WebPConfig*, WebPPicture*);
+
+  auto configInitInternal =
+      (WebPConfigInitInternal_t)dlsym(handle, "WebPConfigInitInternal");
+  auto pictureInitInternal =
+      (WebPPictureInitInternal_t)dlsym(handle, "WebPPictureInitInternal");
+  auto pictureAlloc = (WebPPictureAlloc_t)dlsym(handle, "WebPPictureAlloc");
+  auto pictureFree = (WebPPictureFree_t)dlsym(handle, "WebPPictureFree");
+  auto memoryWriterInit =
+      (WebPMemoryWriterInit_t)dlsym(handle, "WebPMemoryWriterInit");
+  auto memoryWrite = (WebPMemoryWrite_t)dlsym(handle, "WebPMemoryWrite");
+  auto memoryWriterClear =
+      (WebPMemoryWriterClear_t)dlsym(handle, "WebPMemoryWriterClear");
+  auto encode = (WebPEncode_t)dlsym(handle, "WebPEncode");
+
+  if (!configInitInternal || !pictureInitInternal || !pictureAlloc ||
+      !pictureFree || !memoryWriterInit || !memoryWrite || !memoryWriterClear ||
+      !encode) {
+    fprintf(stderr, "webp-nonopt: Failed to load symbols: %s\n", dlerror());
+    dlclose(handle);
     return -1;
   }
 
-  fseek(out_fp, 0, SEEK_END);
-  long file_size = ftell(out_fp);
-  fseek(out_fp, 0, SEEK_SET);
-
-  if (file_size < 0 || (size_t)file_size > max_output_size) {
-    fprintf(stderr,
-            "webp-nonopt: Output too large (%ld bytes, %zu available)\n",
-            file_size, max_output_size);
-    fclose(out_fp);
-    unlink(output_temp);
+  // Now use the library exactly like the optimized version
+  WebPConfig config;
+  // Call the internal function directly with version parameters
+  if (!configInitInternal(&config, WEBP_ENCODER_ABI_VERSION,
+                          WEBP_ENCODER_ABI_VERSION)) {
+    fprintf(stderr, "webp-nonopt: Failed to initialize config\n");
+    dlclose(handle);
     return -1;
   }
 
-  size_t bytes_read = fread(output_buffer, 1, file_size, out_fp);
-  fclose(out_fp);
-  unlink(output_temp);
+  config.quality = 75;
+  config.method = 4;  // Speed/quality trade-off
 
-  if (bytes_read != (size_t)file_size) {
-    fprintf(stderr, "webp-nonopt: Failed to read output file\n");
+  WebPPicture picture;
+  // Call the internal function directly with version parameter
+  if (!pictureInitInternal(&picture, WEBP_ENCODER_ABI_VERSION)) {
+    fprintf(stderr, "webp-nonopt: Failed to initialize picture\n");
+    dlclose(handle);
     return -1;
   }
 
-  *output_size = bytes_read;
-  return 0;
+  picture.width = width;
+  picture.height = height;
+  picture.use_argb = 0;  // Use YUV
+  picture.colorspace = WEBP_YUV420;
+
+  // Allocate picture
+  if (!pictureAlloc(&picture)) {
+    fprintf(stderr, "webp-nonopt: Failed to allocate picture\n");
+    pictureFree(&picture);
+    dlclose(handle);
+    return -1;
+  }
+
+  // Import YUV420 data manually
+  const uint8_t* y_plane = input_buffer;
+  const uint8_t* u_plane = input_buffer + (width * height);
+  const uint8_t* v_plane =
+      input_buffer + (width * height) + (width * height / 4);
+
+  // Copy Y plane
+  for (int y = 0; y < height; y++) {
+    memcpy(picture.y + y * picture.y_stride, y_plane + y * width, width);
+  }
+  // Copy U plane
+  for (int y = 0; y < height / 2; y++) {
+    memcpy(picture.u + y * picture.uv_stride, u_plane + y * (width / 2),
+           width / 2);
+  }
+  // Copy V plane
+  for (int y = 0; y < height / 2; y++) {
+    memcpy(picture.v + y * picture.uv_stride, v_plane + y * (width / 2),
+           width / 2);
+  }
+
+  WebPMemoryWriter writer;
+  memoryWriterInit(&writer);
+  picture.writer = memoryWrite;
+  picture.custom_ptr = &writer;
+
+  int result = 0;
+  if (!encode(&config, &picture)) {
+    fprintf(stderr, "webp-nonopt: Encoding failed\n");
+    result = -1;
+  } else {
+    // Check if output buffer is large enough
+    if (writer.size > max_output_size) {
+      fprintf(
+          stderr,
+          "webp-nonopt: Output buffer too small (%zu needed, %zu available)\n",
+          writer.size, max_output_size);
+      result = -1;
+    } else {
+      // Copy to caller's buffer
+      memcpy(output_buffer, writer.mem, writer.size);
+      *output_size = writer.size;
+    }
+  }
+
+  memoryWriterClear(&writer);
+  pictureFree(&picture);
+  dlclose(handle);
+  return result;
 }
 
 // Android MediaCodec encoder - wrapper that adapts

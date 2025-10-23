@@ -127,7 +127,7 @@ if(BUILD_ENCODERS)
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
         )
 
-        # x265 encoder - non-optimized version (no assembly)
+        # x265 encoder - non-optimized version (no assembly) - SHARED LIBRARY
         ExternalProject_Add(x265-lib-nonopt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
             BINARY_DIR ${CMAKE_BINARY_DIR}/x265-build-nonopt
@@ -140,19 +140,20 @@ if(BUILD_ENCODERS)
                 ${ENCODER_CMAKE_CACHE_ARGS}
             CMAKE_ARGS
                 ${ENCODER_CMAKE_ARGS}
-                -DENABLE_SHARED=OFF
+                -DENABLE_SHARED=ON
+                -DENABLE_STATIC=OFF
                 -DENABLE_CLI=ON
                 -DHIGH_BIT_DEPTH=ON
                 -DENABLE_ASSEMBLY=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
-            # Install, then rename binary and library to x265-nonopt
+            # Install, then copy binary and shared library to *-nonopt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
-            COMMAND ${CMAKE_COMMAND} -E rename
+            COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/bin/x265
                 ${ANICET_INSTALL_DIR}/bin/x265-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ANICET_INSTALL_DIR}/lib/libx265.a
-                ${ANICET_INSTALL_DIR}/lib/libx265-nonopt.a
+                ${ANICET_INSTALL_DIR}/lib/libx265.so
+                ${ANICET_INSTALL_DIR}/lib/libx265-nonopt.so
         )
     endif()
 
@@ -240,7 +241,7 @@ if(BUILD_ENCODERS)
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
         )
 
-        # libjpeg-turbo encoder - non-optimized version (no SIMD)
+        # libjpeg-turbo encoder - non-optimized version (no SIMD) - SHARED LIBRARY
         ExternalProject_Add(libjpeg-turbo-lib-nonopt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libjpeg-turbo
             BINARY_DIR ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-nonopt
@@ -248,24 +249,24 @@ if(BUILD_ENCODERS)
                 ${ENCODER_CMAKE_CACHE_ARGS}
             CMAKE_ARGS
                 ${ENCODER_CMAKE_ARGS}
-                -DENABLE_SHARED=OFF
-                -DENABLE_STATIC=ON
+                -DENABLE_SHARED=ON
+                -DENABLE_STATIC=OFF
                 -DWITH_SIMD=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
-            # Install libraries, then copy binaries and libraries to *-nonopt
+            # Install libraries, then copy binaries and shared libraries to *-nonopt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-nonopt/cjpeg-static
+                ${ANICET_INSTALL_DIR}/bin/cjpeg
                 ${ANICET_INSTALL_DIR}/bin/cjpeg-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-nonopt/djpeg-static
+                ${ANICET_INSTALL_DIR}/bin/djpeg
                 ${ANICET_INSTALL_DIR}/bin/djpeg-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ANICET_INSTALL_DIR}/lib/libjpeg.a
-                ${ANICET_INSTALL_DIR}/lib/libjpeg-nonopt.a
+                ${ANICET_INSTALL_DIR}/lib/libjpeg.so
+                ${ANICET_INSTALL_DIR}/lib/libjpeg-nonopt.so
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ANICET_INSTALL_DIR}/lib/libturbojpeg.a
-                ${ANICET_INSTALL_DIR}/lib/libturbojpeg-nonopt.a
+                ${ANICET_INSTALL_DIR}/lib/libturbojpeg.so
+                ${ANICET_INSTALL_DIR}/lib/libturbojpeg-nonopt.so
         )
     endif()
 
@@ -336,7 +337,7 @@ if(BUILD_ENCODERS)
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
         )
 
-        # libwebp encoder - non-optimized version (no SIMD)
+        # libwebp encoder - non-optimized version (no SIMD) - SHARED LIBRARY
         ExternalProject_Add(libwebp-lib-nonopt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libwebp
             BINARY_DIR ${CMAKE_BINARY_DIR}/libwebp-build-nonopt
@@ -344,7 +345,7 @@ if(BUILD_ENCODERS)
                 ${ENCODER_CMAKE_CACHE_ARGS}
             CMAKE_ARGS
                 ${ENCODER_CMAKE_ARGS}
-                -DBUILD_SHARED_LIBS=OFF
+                -DBUILD_SHARED_LIBS=ON
                 -DWEBP_BUILD_CWEBP=ON
                 -DWEBP_BUILD_DWEBP=ON
                 -DWEBP_ENABLE_SIMD=OFF
@@ -357,20 +358,20 @@ if(BUILD_ENCODERS)
                 -DWEBP_BUILD_WEBPMUX=OFF
                 -DWEBP_BUILD_EXTRAS=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
-            # Install libraries, then copy binaries and libraries to *-nonopt
+            # Install libraries, then copy binaries and shared libraries to *-nonopt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_BINARY_DIR}/libwebp-build-nonopt/cwebp
+                ${ANICET_INSTALL_DIR}/bin/cwebp
                 ${ANICET_INSTALL_DIR}/bin/cwebp-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_BINARY_DIR}/libwebp-build-nonopt/dwebp
+                ${ANICET_INSTALL_DIR}/bin/dwebp
                 ${ANICET_INSTALL_DIR}/bin/dwebp-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ANICET_INSTALL_DIR}/lib/libwebp.a
-                ${ANICET_INSTALL_DIR}/lib/libwebp-nonopt.a
+                ${ANICET_INSTALL_DIR}/lib/libwebp.so
+                ${ANICET_INSTALL_DIR}/lib/libwebp-nonopt.so
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ANICET_INSTALL_DIR}/lib/libsharpyuv.a
-                ${ANICET_INSTALL_DIR}/lib/libsharpyuv-nonopt.a
+                ${ANICET_INSTALL_DIR}/lib/libsharpyuv.so
+                ${ANICET_INSTALL_DIR}/lib/libsharpyuv-nonopt.so
         )
     endif()
 endif()
