@@ -259,7 +259,7 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
   cinfo.image_width = width;
   cinfo.image_height = height;
   cinfo.input_components = 3;
-  cinfo.in_color_space = JCS_YCbCr;
+  cinfo.in_color_space = JCS_RGB;  // We convert YUV to RGB below
 
   jpeg_set_defaults(&cinfo);
   jpeg_set_quality(&cinfo, 75, TRUE);
