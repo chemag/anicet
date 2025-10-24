@@ -316,9 +316,14 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
                                     const uint8_t* input_buffer,
                                     size_t input_size,
                                     const MediaCodecFormat* fmt, int num_runs,
-                                    MediaCodecOutput* output) {
-  // Initialize output
-  output->num_frames = 0;
+                                    CodecOutput* output) {
+  // Initialize output - clear vectors and pre-allocate space
+  output->frame_buffers.clear();
+  output->frame_buffers.resize(num_runs);
+  output->frame_sizes.clear();
+  output->frame_sizes.resize(num_runs);
+  output->timings.clear();
+  output->timings.resize(num_runs);
 
   // Set debug level for this encoding session
   g_debug_level = fmt->debug_level;
@@ -380,7 +385,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
           // Capture timing BEFORE queueInputBuffer
           struct timespec ts;
           clock_gettime(CLOCK_MONOTONIC, &ts);
-          output->timings[frames_sent].queue_input_timestamp_us =
+          output->timings[frames_sent].input_timestamp_us =
               ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
 
           AMediaCodec_queueInputBuffer(codec, (size_t)input_buffer_index, 0,
@@ -460,7 +465,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 
           // Store timing for this frame
           if (current_frame_idx < num_runs) {
-            output->timings[current_frame_idx].get_output_timestamp_us =
+            output->timings[current_frame_idx].output_timestamp_us =
                 get_output_ts;
           }
         }
@@ -492,21 +497,15 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 
   DEBUG(1, "Encoded %d frames, received %d frames", frames_sent, frames_recv);
 
-  // Copy frame buffers to output structure
-  output->num_frames = frames_recv;
+  // Copy frame buffers to output structure using vectors
+  // Resize to actual number of frames received (may be less than num_runs)
+  output->frame_buffers.resize(frames_recv);
+  output->frame_sizes.resize(frames_recv);
+  output->timings.resize(frames_recv);
+
   for (int i = 0; i < frames_recv; i++) {
+    output->frame_buffers[i] = frame_buffers[i];  // Vector copy
     output->frame_sizes[i] = frame_buffers[i].size();
-    output->frame_buffers[i] = (uint8_t*)malloc(output->frame_sizes[i]);
-    if (!output->frame_buffers[i]) {
-      // Cleanup on error
-      for (int j = 0; j < i; j++) {
-        free(output->frame_buffers[j]);
-      }
-      fprintf(stderr, "Error: Cannot allocate frame buffer %d\n", i);
-      return 5;
-    }
-    memcpy(output->frame_buffers[i], frame_buffers[i].data(),
-           output->frame_sizes[i]);
   }
 
   return 0;  // Success
@@ -554,46 +553,32 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
     return setup_result;
   }
 
-  // Allocate MediaCodecOutput structure for single frame (num_runs=1)
-  MediaCodecOutput mediacodec_output;
-  mediacodec_output.frame_buffers = (uint8_t**)calloc(1, sizeof(uint8_t*));
-  mediacodec_output.frame_sizes = (size_t*)calloc(1, sizeof(size_t));
-  mediacodec_output.timings =
-      (MediaCodecFrameTiming*)calloc(1, sizeof(MediaCodecFrameTiming));
-  mediacodec_output.num_frames = 0;
-
-  if (!mediacodec_output.frame_buffers || !mediacodec_output.frame_sizes ||
-      !mediacodec_output.timings) {
-    free(mediacodec_output.frame_buffers);
-    free(mediacodec_output.frame_sizes);
-    free(mediacodec_output.timings);
-    android_mediacodec_encode_cleanup(codec, format->debug_level);
-    return -1;
-  }
+  // Create CodecOutput structure for single frame (num_runs=1)
+  // Vectors will be initialized by the encode function
+  CodecOutput mediacodec_output;
 
   // Encode single frame (num_runs=1)
   int result = android_mediacodec_encode_frame(codec, input_buffer, input_size,
                                                format, 1, &mediacodec_output);
 
-  // Copy first frame's output to caller's buffer
-  if (result == 0 && mediacodec_output.num_frames > 0) {
-    *output_buffer = mediacodec_output.frame_buffers[0];
+  // Copy first frame's output to caller's buffer (malloc for caller)
+  if (result == 0 && mediacodec_output.num_frames() > 0) {
     *output_size = mediacodec_output.frame_sizes[0];
-    // Don't free frame_buffers[0] - caller owns it now
+    *output_buffer = (uint8_t*)malloc(*output_size);
+    if (*output_buffer) {
+      memcpy(*output_buffer, mediacodec_output.frame_buffers[0].data(),
+             *output_size);
+    } else {
+      *output_size = 0;
+      result = -1;
+    }
   } else {
     *output_buffer = nullptr;
     *output_size = 0;
-    // Free on error
-    if (mediacodec_output.num_frames > 0 &&
-        mediacodec_output.frame_buffers[0]) {
-      free(mediacodec_output.frame_buffers[0]);
-    }
   }
 
-  // Free arrays (but not frame_buffers[0] on success - caller owns it)
-  free(mediacodec_output.frame_buffers);
-  free(mediacodec_output.frame_sizes);
-  free(mediacodec_output.timings);
+  // Vectors will be automatically freed when mediacodec_output goes out of
+  // scope
 
   // Cleanup
   android_mediacodec_encode_cleanup(codec, format->debug_level);
@@ -620,16 +605,15 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
                                     const uint8_t* input_buffer,
                                     size_t input_size,
                                     const MediaCodecFormat* format,
-                                    int num_runs, MediaCodecOutput* output) {
+                                    int num_runs, CodecOutput* output) {
   (void)codec;
   (void)input_buffer;
   (void)input_size;
   (void)format;
   (void)num_runs;
-  output->frame_buffers = nullptr;
-  output->frame_sizes = nullptr;
-  output->timings = nullptr;
-  output->num_frames = 0;
+  output->frame_buffers.clear();
+  output->frame_sizes.clear();
+  output->timings.clear();
   fprintf(stderr, "Error: MediaCodec encoding only works on Android\n");
   return 1;
 }

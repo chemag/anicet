@@ -8,6 +8,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Include common codec structures
+#include "anicet_runner.h"
+
 // Include binder initialization for cleanup function
 #include "android_binder_init.h"
 
@@ -64,20 +67,6 @@ typedef struct {
   int debug_level;  // Debug verbosity (0 = quiet, 1+ = verbose)
 } MediaCodecFormat;
 
-// Per-frame timing information
-typedef struct {
-  int64_t queue_input_timestamp_us;  // Before AMediaCodec_queueInputBuffer()
-  int64_t get_output_timestamp_us;   // After AMediaCodec_getOutputBuffer()
-} MediaCodecFrameTiming;
-
-// MediaCodec encoding output with timing data
-typedef struct {
-  uint8_t** frame_buffers;         // Array of output buffers (one per frame)
-  size_t* frame_sizes;             // Array of output sizes (one per frame)
-  MediaCodecFrameTiming* timings;  // Array of timing data (one per frame)
-  int num_frames;                  // Number of frames encoded
-} MediaCodecOutput;
-
 // Forward declaration for Android MediaCodec
 struct AMediaCodec;
 
@@ -102,8 +91,7 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* format,
 //   input_size:    Size of input buffer in bytes
 //   format:        Encoding configuration (color_format, dimensions, etc.)
 //   num_runs:      Number of frames to encode (reuses input_buffer)
-//   output:        Pre-allocated MediaCodecOutput struct (caller allocates
-//   arrays)
+//   output:        Pre-allocated CodecOutput struct (caller allocates arrays)
 //
 // Returns:
 //   0 on success, non-zero error code on failure
@@ -116,7 +104,7 @@ int android_mediacodec_encode_frame(struct AMediaCodec* codec,
                                     const uint8_t* input_buffer,
                                     size_t input_size,
                                     const MediaCodecFormat* format,
-                                    int num_runs, MediaCodecOutput* output);
+                                    int num_runs, CodecOutput* output);
 
 // Cleanup MediaCodec encoder and free resources
 //

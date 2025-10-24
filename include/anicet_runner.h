@@ -8,75 +8,89 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
+#include <vector>
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-// Individual encoder sub-runners
+// Per-frame timing information
+typedef struct {
+  int64_t input_timestamp_us;   // Before encoding starts
+  int64_t output_timestamp_us;  // After encoding completes
+} CodecFrameTiming;
+
+#ifdef __cplusplus
+}
+
+// Codec encoding output with timing data (C++ only)
+// This structure uses C++ vectors for automatic memory management
+struct CodecOutput {
+  std::vector<std::vector<uint8_t>>
+      frame_buffers;                // Output buffers (one per frame)
+  std::vector<size_t> frame_sizes;  // Output sizes (one per frame) - redundant
+                                    // but kept for compatibility
+  std::vector<CodecFrameTiming> timings;  // Timing data (one per frame)
+
+  // Helper method to get number of frames
+  size_t num_frames() const { return frame_buffers.size(); }
+};
+
+// Individual encoder sub-runners (C++ only)
 // All sub-runners follow the same pattern:
-//   - Input: raw YUV420p buffer, dimensions, color format, output buffer
-//   - Output: encoded data written to output_buffer, size updated
-//   - output_size: INPUT = max buffer capacity, OUTPUT = actual bytes written
-//   - Return: 0 on success, -1 on error (including buffer too small)
+//   - Input: raw YUV420p buffer, dimensions, color format, num_runs
+//   - Output: CodecOutput structure with encoded frames and timing data
+//   - Return: 0 on success, -1 on error
 //
 // NOTE: All encoders write to memory buffers only, no file I/O
 
 // WebP encoder - optimized
 int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
-                    int width, const char* color_format, uint8_t* output_buffer,
-                    size_t* output_size, int num_runs);
+                    int width, const char* color_format, int num_runs,
+                    CodecOutput* output);
 
 // WebP encoder - non-optimized (no SIMD)
 int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
-                           uint8_t* output_buffer, size_t* output_size,
-                           int num_runs);
+                           int num_runs, CodecOutput* output);
 
 // libjpeg-turbo encoder (using TurboJPEG API) - optimized
 int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
                             int height, int width, const char* color_format,
-                            uint8_t* output_buffer, size_t* output_size,
-                            int num_runs);
+                            int num_runs, CodecOutput* output);
 
 // libjpeg-turbo encoder (using TurboJPEG API) - non-optimized (no SIMD)
 int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
                                    size_t input_size, int height, int width,
-                                   const char* color_format,
-                                   uint8_t* output_buffer, size_t* output_size,
-                                   int num_runs);
+                                   const char* color_format, int num_runs,
+                                   CodecOutput* output);
 
 // jpegli encoder (JPEG XL's JPEG encoder)
 int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      uint8_t* output_buffer, size_t* output_size,
-                      int num_runs);
+                      int num_runs, CodecOutput* output);
 
 // x265 encoder (H.265/HEVC) 8-bit - optimized
 int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
                          int height, int width, const char* color_format,
-                         uint8_t* output_buffer, size_t* output_size,
-                         int num_runs);
+                         int num_runs, CodecOutput* output);
 
 // x265 encoder (H.265/HEVC) 8-bit - non-optimized (no assembly)
 int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
                                 int height, int width, const char* color_format,
-                                uint8_t* output_buffer, size_t* output_size,
-                                int num_runs);
+                                int num_runs, CodecOutput* output);
 
 // SVT-AV1 encoder
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      uint8_t* output_buffer, size_t* output_size,
-                      int num_runs);
+                      int num_runs, CodecOutput* output);
 
 // Android MediaCodec encoder (Android only)
-// This is a wrapper around android_mediacodec_encode_frame()
-// NOTE: This function still allocates memory internally via
-// android_mediacodec_encode_frame
-//       The allocated buffer is copied to output_buffer if it fits
 int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
-                          const char* codec_name, uint8_t* output_buffer,
-                          size_t* output_size, int num_runs);
+                          const char* codec_name, int num_runs,
+                          CodecOutput* output);
 
 // Run encoding experiment with multiple encoders
 // Encodes the same raw YUV420p image using specified encoder(s)
@@ -91,6 +105,7 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
 //   codec_name:   Codec to use: "x265", "x265-nonopt", "svt-av1",
 //                 "libjpeg-turbo", "libjpeg-turbo-nonopt", "jpegli",
 //                 "webp", "mediacodec", "all" (default: all encoders)
+//   num_runs:     Number of times to encode the same frame
 //
 // Returns:
 //   Number of encoding errors (0 = all succeeded)
@@ -98,8 +113,6 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
                       const char* codec_name, int num_runs);
 
-#ifdef __cplusplus
-}
-#endif
+#endif  // __cplusplus
 
 #endif  // ANICET_RUNNER_H

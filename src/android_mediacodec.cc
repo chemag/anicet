@@ -363,8 +363,9 @@ static int encode_frames(const Options& opt) {
   format.color_format = opt.color_format.c_str();
   format.quality = opt.quality;
   format.bitrate = opt.bitrate;
-  format.frame_count = opt.frame_count;
   format.debug_level = opt.debug_level;
+  // Note: frame_count is not part of MediaCodecFormat
+  // The frame_count option is ignored for this standalone encoder
 
   uint8_t* output_buffer = nullptr;
   size_t output_size = 0;
