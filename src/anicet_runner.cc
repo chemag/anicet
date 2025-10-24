@@ -565,61 +565,69 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   int result = 0;
 
   PROFILE_RESOURCES_START(svt_av1_encode_cpu);
+
+  // Step 1: Send all input pictures (I-frame only, no EOS between them)
   for (int run = 0; run < num_runs; run++) {
-    // Send one picture
     res = svt_av1_enc_send_picture(handle, &input_buf);
     if (res != EB_ErrorNone) {
       fprintf(stderr, "SVT-AV1: Failed to send picture (run %d)\n", run);
       result = -1;
       break;
     }
+  }
 
-    // Send EOS to flush this frame
+  // Step 2: Send EOS once at the end to flush all frames
+  if (result == 0) {
     EbBufferHeaderType eos_buffer;
     memset(&eos_buffer, 0, sizeof(eos_buffer));
     eos_buffer.size = sizeof(EbBufferHeaderType);
     eos_buffer.flags = EB_BUFFERFLAG_EOS;
     res = svt_av1_enc_send_picture(handle, &eos_buffer);
     if (res != EB_ErrorNone) {
-      fprintf(stderr, "SVT-AV1: Failed to send EOS (run %d)\n", run);
+      fprintf(stderr, "SVT-AV1: Failed to send EOS\n");
       result = -1;
-      break;
-    }
-
-    // Get output packet for this frame
-    EbBufferHeaderType* output_buf = nullptr;
-    res = svt_av1_enc_get_packet(handle, &output_buf, 1);
-    if (res == EB_ErrorNone && output_buf && output_buf->n_filled_len > 0) {
-      // Save this run's output for verification
-      char filename[256];
-      snprintf(filename, sizeof(filename),
-               "/data/local/tmp/bin/out/output.svtav1.%d.bin", run);
-      FILE* f = fopen(filename, "wb");
-      if (f) {
-        fwrite(output_buf->p_buffer, 1, output_buf->n_filled_len, f);
-        fclose(f);
-      }
-
-      // Keep only the last frame's output
-      if (run == num_runs - 1) {
-        if (output_buf->n_filled_len > max_output_size) {
-          fprintf(
-              stderr,
-              "SVT-AV1: Output buffer too small (%u needed, %zu available)\n",
-              output_buf->n_filled_len, max_output_size);
-          result = -1;
-        } else {
-          memcpy(output_buffer, output_buf->p_buffer, output_buf->n_filled_len);
-          *output_size = output_buf->n_filled_len;
-        }
-      }
-      svt_av1_enc_release_out_buffer(&output_buf);
-    } else {
-      fprintf(stderr, "SVT-AV1: Failed to get output packet (run %d)\n", run);
-      result = -1;
-      break;
     }
   }
+
+  // Step 3: Collect all output packets
+  if (result == 0) {
+    for (int run = 0; run < num_runs; run++) {
+      EbBufferHeaderType* output_buf = nullptr;
+      res = svt_av1_enc_get_packet(handle, &output_buf, 1);
+      if (res == EB_ErrorNone && output_buf && output_buf->n_filled_len > 0) {
+        // Save this run's output for verification
+        char filename[256];
+        snprintf(filename, sizeof(filename),
+                 "/data/local/tmp/bin/out/output.svtav1.%d.bin", run);
+        FILE* f = fopen(filename, "wb");
+        if (f) {
+          fwrite(output_buf->p_buffer, 1, output_buf->n_filled_len, f);
+          fclose(f);
+        }
+
+        // Keep only the last frame's output
+        if (run == num_runs - 1) {
+          if (output_buf->n_filled_len > max_output_size) {
+            fprintf(
+                stderr,
+                "SVT-AV1: Output buffer too small (%u needed, %zu available)\n",
+                output_buf->n_filled_len, max_output_size);
+            result = -1;
+          } else {
+            memcpy(output_buffer, output_buf->p_buffer,
+                   output_buf->n_filled_len);
+            *output_size = output_buf->n_filled_len;
+          }
+        }
+        svt_av1_enc_release_out_buffer(&output_buf);
+      } else {
+        fprintf(stderr, "SVT-AV1: Failed to get output packet (run %d)\n", run);
+        result = -1;
+        break;
+      }
+    }
+  }
+
   PROFILE_RESOURCES_END(svt_av1_encode_cpu);
 
   // (d) Codec cleanup
