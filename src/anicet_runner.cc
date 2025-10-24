@@ -357,10 +357,11 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
   return result;
 }
 
-// x265 encoder - writes to caller-provided memory buffer only
-int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
-                    int width, const char* color_format, uint8_t* output_buffer,
-                    size_t* output_size, int num_runs) {
+// x265 encoder (8-bit) - writes to caller-provided memory buffer only
+int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
+                         int height, int width, const char* color_format,
+                         uint8_t* output_buffer, size_t* output_size,
+                         int num_runs) {
   (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
@@ -375,7 +376,7 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
   PROFILE_RESOURCES_START(x265_total_memory);
 
-  // (a) Codec setup
+  // (a) Codec setup - setup ONCE for all frames
   x265_param* param = x265_param_alloc();
   if (!param) {
     fprintf(stderr, "x265: Failed to allocate parameters\n");
@@ -389,10 +390,9 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
   param->fpsNum = 30;
   param->fpsDenom = 1;
   param->internalCsp = X265_CSP_I420;
-
-  // Force I-frame only mode - every frame is an IDR
-  param->keyframeMax = 1;  // Keyframe interval = 1
-  param->bframes = 0;      // No B-frames
+  param->internalBitDepth = 8;  // Library is compiled for 8-bit
+  param->keyframeMax = 1;       // I-frame only
+  param->bframes = 0;
 
   x265_encoder* encoder = x265_encoder_open(param);
   if (!encoder) {
@@ -405,7 +405,8 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
   x265_picture* pic_in = x265_picture_alloc();
   x265_picture_init(param, pic_in);
 
-  // (b) Input conversion - Set up picture planes for YUV420
+  // (b) Input conversion - Set up picture planes for YUV420 (8-bit)
+  pic_in->bitDepth = 8;
   pic_in->planes[0] = (void*)input_buffer;
   pic_in->planes[1] = (void*)(input_buffer + width * height);
   pic_in->planes[2] =
@@ -414,7 +415,7 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
   pic_in->stride[1] = width / 2;
   pic_in->stride[2] = width / 2;
 
-  // (c) Actual encoding - run num_runs times
+  // (c) Actual encoding - run num_runs times through same encoder
   int result = 0;
   PROFILE_RESOURCES_START(x265_encode_cpu);
 
@@ -439,7 +440,7 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
       total_size += nals[i].sizeBytes;
     }
 
-    // Copy all NAL units into a temporary buffer to save to file
+    // Copy all NAL units into a temporary buffer
     std::vector<uint8_t> frame_buffer(total_size);
     size_t offset = 0;
     for (uint32_t i = 0; i < num_nals; i++) {
@@ -450,7 +451,7 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
     // Save this run's output for verification
     char filename[256];
     snprintf(filename, sizeof(filename),
-             "/data/local/tmp/bin/out/output.x265.%d.bin", run);
+             "/data/local/tmp/bin/out/output.x265-8bit.%d.bin", run);
     FILE* f = fopen(filename, "wb");
     if (f) {
       fwrite(frame_buffer.data(), 1, total_size, f);
@@ -473,7 +474,7 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
 
   PROFILE_RESOURCES_END(x265_encode_cpu);
 
-  // (d) Codec cleanup
+  // (d) Codec cleanup - cleanup ONCE at the end
   x265_picture_free(pic_in);
   x265_encoder_close(encoder);
   x265_param_free(param);
@@ -638,11 +639,12 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   return result;
 }
 
-// x265 encoder (non-optimized) - uses dlopen to avoid symbol conflicts
-// Dynamically loads libx265-nonopt.so with RTLD_LOCAL for symbol isolation
-int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
-                           int height, int width, const char* color_format,
-                           uint8_t* output_buffer, size_t* output_size) {
+// x265 encoder (8-bit, non-optimized) - uses dlopen to avoid symbol conflicts
+// Dynamically loads libx265-8bit-nonopt.so with RTLD_LOCAL for symbol isolation
+int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
+                                int height, int width, const char* color_format,
+                                uint8_t* output_buffer, size_t* output_size,
+                                int num_runs) {
   (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
@@ -654,10 +656,16 @@ int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
-  // Load libx265-nonopt.so with RTLD_LOCAL to isolate symbols
-  void* handle = dlopen("libx265-nonopt.so", RTLD_NOW | RTLD_LOCAL);
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(x265_8bit_nonopt_total_memory);
+
+  // (a) Codec setup - Load libx265-8bit-nonopt.so with RTLD_LOCAL to isolate
+  // symbols
+  void* handle = dlopen("libx265-8bit-nonopt.so", RTLD_NOW | RTLD_LOCAL);
   if (!handle) {
-    fprintf(stderr, "x265-nonopt: Failed to load library: %s\n", dlerror());
+    fprintf(stderr, "x265-8bit-nonopt: Failed to load library: %s\n",
+            dlerror());
+    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
     return -1;
   }
 
@@ -691,16 +699,19 @@ int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
   if (!param_alloc || !param_default_preset || !encoder_open ||
       !picture_alloc || !picture_init || !encoder_encode || !picture_free ||
       !encoder_close || !param_free) {
-    fprintf(stderr, "x265-nonopt: Failed to load symbols: %s\n", dlerror());
+    fprintf(stderr, "x265-8bit-nonopt: Failed to load symbols: %s\n",
+            dlerror());
     dlclose(handle);
+    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
     return -1;
   }
 
   // Now use the library exactly like the optimized version
   x265_param* param = param_alloc();
   if (!param) {
-    fprintf(stderr, "x265-nonopt: Failed to allocate parameters\n");
+    fprintf(stderr, "x265-8bit-nonopt: Failed to allocate parameters\n");
     dlclose(handle);
+    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
     return -1;
   }
 
@@ -710,19 +721,24 @@ int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
   param->fpsNum = 30;
   param->fpsDenom = 1;
   param->internalCsp = X265_CSP_I420;
+  param->internalBitDepth = 8;  // Library is compiled for 8-bit
+  param->keyframeMax = 1;       // I-frame only
+  param->bframes = 0;
 
   x265_encoder* encoder = encoder_open(param);
   if (!encoder) {
-    fprintf(stderr, "x265-nonopt: Failed to open encoder\n");
+    fprintf(stderr, "x265-8bit-nonopt: Failed to open encoder\n");
     param_free(param);
     dlclose(handle);
+    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
     return -1;
   }
 
   x265_picture* pic_in = picture_alloc();
   picture_init(param, pic_in);
 
-  // Set up picture planes for YUV420
+  // (b) Input conversion - Set up picture planes for YUV420 (8-bit)
+  pic_in->bitDepth = 8;
   pic_in->planes[0] = (void*)input_buffer;
   pic_in->planes[1] = (void*)(input_buffer + width * height);
   pic_in->planes[2] =
@@ -731,41 +747,71 @@ int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
   pic_in->stride[1] = width / 2;
   pic_in->stride[2] = width / 2;
 
-  x265_nal* nals = nullptr;
-  uint32_t num_nals = 0;
-  int frame_size = encoder_encode(encoder, &nals, &num_nals, pic_in, nullptr);
+  // (c) Actual encoding - run num_runs times through same encoder
+  int result = 0;
+  PROFILE_RESOURCES_START(x265_8bit_nonopt_encode_cpu);
 
-  int result = -1;
-  if (frame_size > 0) {
-    // Calculate total size
+  for (int run = 0; run < num_runs; run++) {
+    // Force this frame to be IDR
+    pic_in->sliceType = X265_TYPE_IDR;
+
+    x265_nal* nals = nullptr;
+    uint32_t num_nals = 0;
+    int frame_size = encoder_encode(encoder, &nals, &num_nals, pic_in, nullptr);
+
+    if (frame_size <= 0) {
+      fprintf(stderr, "x265-8bit-nonopt: Encoding failed (run %d)\n", run);
+      result = -1;
+      break;
+    }
+
+    // Calculate total size for this frame
     size_t total_size = 0;
     for (uint32_t i = 0; i < num_nals; i++) {
       total_size += nals[i].sizeBytes;
     }
 
-    if (total_size > max_output_size) {
-      fprintf(stderr,
-              "x265-nonopt: Output buffer too small (%zu needed, %zu "
-              "available)\n",
-              total_size, max_output_size);
-    } else {
-      // Copy all NAL units into output buffer
-      size_t offset = 0;
-      for (uint32_t i = 0; i < num_nals; i++) {
-        memcpy(output_buffer + offset, nals[i].payload, nals[i].sizeBytes);
-        offset += nals[i].sizeBytes;
-      }
-      *output_size = total_size;
-      result = 0;
+    // Copy all NAL units into a temporary buffer
+    std::vector<uint8_t> frame_buffer(total_size);
+    size_t offset = 0;
+    for (uint32_t i = 0; i < num_nals; i++) {
+      memcpy(frame_buffer.data() + offset, nals[i].payload, nals[i].sizeBytes);
+      offset += nals[i].sizeBytes;
     }
-  } else {
-    fprintf(stderr, "x265-nonopt: Encoding failed\n");
+
+    // Save this run's output for verification
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/data/local/tmp/bin/out/output.x265-8bit-nonopt.%d.bin", run);
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(frame_buffer.data(), 1, total_size, f);
+      fclose(f);
+    }
+
+    // Use last run's output for caller's buffer
+    if (run == num_runs - 1) {
+      if (total_size > max_output_size) {
+        fprintf(stderr,
+                "x265-8bit-nonopt: Output buffer too small (%zu needed, %zu "
+                "available)\n",
+                total_size, max_output_size);
+        result = -1;
+      } else {
+        memcpy(output_buffer, frame_buffer.data(), total_size);
+        *output_size = total_size;
+      }
+    }
   }
 
+  PROFILE_RESOURCES_END(x265_8bit_nonopt_encode_cpu);
+
+  // (d) Codec cleanup - cleanup ONCE at the end
   picture_free(pic_in);
   encoder_close(encoder);
   param_free(param);
   dlclose(handle);
+  PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
   return result;
 }
 
@@ -1190,8 +1236,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   bool run_libjpeg_turbo_nonopt =
       (strcmp(codec_name, "libjpeg-turbo-nonopt") == 0);
   bool run_jpegli = run_all || (strcmp(codec_name, "jpegli") == 0);
-  bool run_x265 = run_all || (strcmp(codec_name, "x265") == 0);
-  bool run_x265_nonopt = (strcmp(codec_name, "x265-nonopt") == 0);
+  bool run_x265_8bit = run_all || (strcmp(codec_name, "x265-8bit") == 0);
+  bool run_x265_8bit_nonopt = (strcmp(codec_name, "x265-8bit-nonopt") == 0);
   bool run_svtav1 = run_all || (strcmp(codec_name, "svt-av1") == 0);
   bool run_mediacodec = run_all || (strcmp(codec_name, "mediacodec") == 0);
 
@@ -1278,30 +1324,31 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     }
   }
 
-  // 4. x265 (H.265/HEVC) encoding (opt)
-  if (run_x265) {
-    printf("\n--- x265 (H.265/HEVC) ---\n");
+  // 4. x265 (H.265/HEVC) 8-bit encoding (opt)
+  if (run_x265_8bit) {
+    printf("\n--- x265 (H.265/HEVC) 8-bit ---\n");
     size_t output_size = output_buffer_size;
-    if (anicet_run_x265(buffer, buf_size, height, width, color_format,
-                        output_buffer, &output_size, num_runs) == 0) {
-      printf("x265: Encoded to %zu bytes (%.2f%% of original)\n", output_size,
-             (output_size * 100.0) / buf_size);
+    if (anicet_run_x265_8bit(buffer, buf_size, height, width, color_format,
+                             output_buffer, &output_size, num_runs) == 0) {
+      printf("x265-8bit: Encoded to %zu bytes (%.2f%% of original)\n",
+             output_size, (output_size * 100.0) / buf_size);
     } else {
-      fprintf(stderr, "x265: Encoding failed\n");
+      fprintf(stderr, "x265-8bit: Encoding failed\n");
       errors++;
     }
   }
 
-  // 4b. x265 (H.265/HEVC) encoding (nonopt)
-  if (run_x265_nonopt) {
-    printf("\n--- x265 (H.265/HEVC) (nonopt) ---\n");
+  // 4b. x265 (H.265/HEVC) 8-bit encoding (nonopt)
+  if (run_x265_8bit_nonopt) {
+    printf("\n--- x265 (H.265/HEVC) 8-bit (nonopt) ---\n");
     size_t output_size = output_buffer_size;
-    if (anicet_run_x265_nonopt(buffer, buf_size, height, width, color_format,
-                               output_buffer, &output_size) == 0) {
-      printf("x265 (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
+    if (anicet_run_x265_8bit_nonopt(buffer, buf_size, height, width,
+                                    color_format, output_buffer, &output_size,
+                                    num_runs) == 0) {
+      printf("x265-8bit (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
-      fprintf(stderr, "x265 (nonopt): Encoding failed\n");
+      fprintf(stderr, "x265-8bit (nonopt): Encoding failed\n");
       errors++;
     }
   }

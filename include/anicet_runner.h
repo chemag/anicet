@@ -50,15 +50,17 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
                       uint8_t* output_buffer, size_t* output_size,
                       int num_runs);
 
-// x265 encoder (H.265/HEVC) - optimized
-int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
-                    int width, const char* color_format, uint8_t* output_buffer,
-                    size_t* output_size, int num_runs);
+// x265 encoder (H.265/HEVC) 8-bit - optimized
+int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
+                         int height, int width, const char* color_format,
+                         uint8_t* output_buffer, size_t* output_size,
+                         int num_runs);
 
-// x265 encoder (H.265/HEVC) - non-optimized (no assembly)
-int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
-                           int height, int width, const char* color_format,
-                           uint8_t* output_buffer, size_t* output_size);
+// x265 encoder (H.265/HEVC) 8-bit - non-optimized (no assembly)
+int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
+                                int height, int width, const char* color_format,
+                                uint8_t* output_buffer, size_t* output_size,
+                                int num_runs);
 
 // SVT-AV1 encoder
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,

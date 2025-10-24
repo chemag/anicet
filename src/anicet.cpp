@@ -210,7 +210,7 @@ static void print_help(const char* argv0) {
       "  --width N                Image width in pixels\n"
       "  --height N               Image height in pixels\n"
       "  --color-format FORMAT    Color format (e.g., yuv420p)\n"
-      "  --codec CODEC            Codec to use: x265, x265-nonopt, svt-av1,\n"
+      "  --codec CODEC            Codec to use: x265-8bit, x265-8bit-nonopt, svt-av1,\n"
       "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
       "                           webp, webp-nonopt, mediacodec, all (default: all)\n"
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
@@ -343,7 +343,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       opt.codec = argv[++i];
       // Validate codec name
       std::set<std::string> valid_codecs = {
-        "x265", "x265-nonopt", "svt-av1", "libjpeg-turbo",
+        "x265-8bit", "x265-8bit-nonopt", "svt-av1", "libjpeg-turbo",
         "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
         "mediacodec", "all"
       };

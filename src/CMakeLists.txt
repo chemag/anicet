@@ -58,7 +58,7 @@ target_compile_options(anicet PRIVATE
 
 # Link encoder libraries
 target_link_libraries(anicet PRIVATE
-    ${CMAKE_INSTALL_PREFIX}/lib/libx265.a
+    ${CMAKE_INSTALL_PREFIX}/lib/libx265-8bit.a
     ${CMAKE_INSTALL_PREFIX}/lib/libSvtAv1Enc.a
     ${CMAKE_INSTALL_PREFIX}/lib/libjpeg.a
     ${CMAKE_INSTALL_PREFIX}/lib/libturbojpeg.a

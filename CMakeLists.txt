@@ -101,9 +101,9 @@ if(BUILD_ENCODERS)
     endif()
 
     if(BUILD_X265)
-        ExternalProject_Add(x265-lib
+        ExternalProject_Add(x265-8bit-lib
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
-            BINARY_DIR ${CMAKE_BINARY_DIR}/x265-build
+            BINARY_DIR ${CMAKE_BINARY_DIR}/x265-8bit-build
             # Apply pthread fix patch (idempotent - only applies once)
             PATCH_COMMAND sh ${CMAKE_SOURCE_DIR}/patches/apply-x265-patch.sh
                 ${CMAKE_SOURCE_DIR}/lib/x265/source/.pthread-patched
@@ -121,16 +121,23 @@ if(BUILD_ENCODERS)
                 ${ENCODER_CMAKE_ARGS}
                 -DENABLE_SHARED=OFF
                 -DENABLE_CLI=ON
-                -DHIGH_BIT_DEPTH=ON
+                -DHIGH_BIT_DEPTH=OFF
                 -DENABLE_ASSEMBLY=ON
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            # Rename binaries and libraries to include 8bit suffix
+            COMMAND ${CMAKE_COMMAND} -E rename
+                ${ANICET_INSTALL_DIR}/bin/x265
+                ${ANICET_INSTALL_DIR}/bin/x265-8bit
+            COMMAND ${CMAKE_COMMAND} -E rename
+                ${ANICET_INSTALL_DIR}/lib/libx265.a
+                ${ANICET_INSTALL_DIR}/lib/libx265-8bit.a
         )
 
         # x265 encoder - non-optimized version (no assembly) - SHARED LIBRARY
-        ExternalProject_Add(x265-lib-nonopt
+        ExternalProject_Add(x265-8bit-lib-nonopt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
-            BINARY_DIR ${CMAKE_BINARY_DIR}/x265-build-nonopt
+            BINARY_DIR ${CMAKE_BINARY_DIR}/x265-8bit-build-nonopt
             # Apply pthread fix patch (idempotent - only applies once)
             PATCH_COMMAND sh ${CMAKE_SOURCE_DIR}/patches/apply-x265-patch.sh
                 ${CMAKE_SOURCE_DIR}/lib/x265/source/.pthread-patched
@@ -143,17 +150,17 @@ if(BUILD_ENCODERS)
                 -DENABLE_SHARED=ON
                 -DENABLE_STATIC=OFF
                 -DENABLE_CLI=ON
-                -DHIGH_BIT_DEPTH=ON
+                -DHIGH_BIT_DEPTH=OFF
                 -DENABLE_ASSEMBLY=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
-            # Install, then copy binary and shared library to *-nonopt
+            # Install, then copy binary and shared library with 8bit suffix
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
             COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/bin/x265
-                ${ANICET_INSTALL_DIR}/bin/x265-nonopt
+                ${ANICET_INSTALL_DIR}/bin/x265-8bit-nonopt
             COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/lib/libx265.so
-                ${ANICET_INSTALL_DIR}/lib/libx265-nonopt.so
+                ${ANICET_INSTALL_DIR}/lib/libx265-8bit-nonopt.so
         )
     endif()
 
