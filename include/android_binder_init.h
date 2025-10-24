@@ -13,31 +13,11 @@
 
 #include <cstdio>
 
-// Get timestamp in seconds since start (matches main code)
-static double binder_get_timestamp_s() {
-  static struct timeval start_time = {0, 0};
-  struct timeval now;
-  gettimeofday(&now, nullptr);
+#include "anicet_common.h"
 
-  // Initialize start time on first call
-  if (start_time.tv_sec == 0) {
-    start_time = now;
-  }
-
-  double elapsed = (now.tv_sec - start_time.tv_sec) +
-                   (now.tv_usec - start_time.tv_usec) / 1000000.0;
-  return elapsed;
-}
-
-// Logging macro that matches the main DEBUG format
-#define BINDER_DEBUG(debug_level, level, ...)                                \
-  do {                                                                       \
-    if (debug_level >= level) {                                              \
-      fprintf(stderr, "[%8.3f][DEBUG%d] ", binder_get_timestamp_s(), level); \
-      fprintf(stderr, __VA_ARGS__);                                          \
-      fprintf(stderr, "\n");                                                 \
-    }                                                                        \
-  } while (0)
+// Use unified DEBUG macro from anicet_common.h
+#define BINDER_DEBUG(debug_level, level, ...) \
+  ANICET_DEBUG(debug_level, level, __VA_ARGS__)
 
 // Global thread handle for cleanup
 static pthread_t g_binder_thread = 0;

@@ -29,30 +29,8 @@
 // Global debug level (set in encode function)
 static int g_debug_level = 0;
 
-// Get timestamp in seconds since start
-static double get_timestamp_s() {
-  static struct timeval start_time = {0, 0};
-  struct timeval now;
-  gettimeofday(&now, nullptr);
-
-  // Initialize start time on first call
-  if (start_time.tv_sec == 0) {
-    start_time = now;
-  }
-
-  double elapsed = (now.tv_sec - start_time.tv_sec) +
-                   (now.tv_usec - start_time.tv_usec) / 1000000.0;
-  return elapsed;
-}
-
-#define DEBUG(level, ...)                                             \
-  do {                                                                \
-    if (g_debug_level >= level) {                                     \
-      fprintf(stderr, "[%8.3f][DEBUG%d] ", get_timestamp_s(), level); \
-      fprintf(stderr, __VA_ARGS__);                                   \
-      fprintf(stderr, "\n");                                          \
-    }                                                                 \
-  } while (0)
+// Use unified DEBUG macro from anicet_common.h
+#define DEBUG(level, ...) ANICET_DEBUG(g_debug_level, level, __VA_ARGS__)
 
 #ifdef __ANDROID__
 #define LOGE(...) \
@@ -391,7 +369,8 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
           uint64_t pts_timestamp_us = frames_sent * 33'000;
 
           // Capture timing BEFORE queueInputBuffer
-          output->timings[frames_sent].input_timestamp_us = anicet_get_timestamp();
+          output->timings[frames_sent].input_timestamp_us =
+              anicet_get_timestamp();
 
           AMediaCodec_queueInputBuffer(codec, (size_t)input_buffer_index, 0,
                                        frame_size, pts_timestamp_us, 0);

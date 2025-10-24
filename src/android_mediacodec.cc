@@ -25,6 +25,8 @@
 #include "android_mediacodec_lib.h"
 #endif
 
+#include "anicet_common.h"
+
 #define DEFAULT_QUALITY 80
 
 // Color format constants are now defined in android_mediacodec_lib.h
@@ -52,30 +54,8 @@ struct Options {
 // Global debug level (set from Options in main)
 static int g_debug_level = 0;
 
-// Get timestamp in seconds since start
-static double get_timestamp_s() {
-  static struct timeval start_time = {0, 0};
-  struct timeval now;
-  gettimeofday(&now, nullptr);
-
-  // Initialize start time on first call
-  if (start_time.tv_sec == 0) {
-    start_time = now;
-  }
-
-  double elapsed = (now.tv_sec - start_time.tv_sec) +
-                   (now.tv_usec - start_time.tv_usec) / 1000000.0;
-  return elapsed;
-}
-
-#define DEBUG(level, ...)                                             \
-  do {                                                                \
-    if (g_debug_level >= level) {                                     \
-      fprintf(stderr, "[%8.3f][DEBUG%d] ", get_timestamp_s(), level); \
-      fprintf(stderr, __VA_ARGS__);                                   \
-      fprintf(stderr, "\n");                                          \
-    }                                                                 \
-  } while (0)
+// Use unified DEBUG macro from anicet_common.h
+#define DEBUG(level, ...) ANICET_DEBUG(g_debug_level, level, __VA_ARGS__)
 
 #ifdef __ANDROID__
 #define LOGE(...) \
