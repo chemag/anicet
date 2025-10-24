@@ -203,7 +203,8 @@ static bool parse_args(int argc, char** argv, Options& opt) {
 
   // Validation
   if (opt.list_codecs || opt.list_image_codecs) {
-    return true;  // Listing mode, no other validation needed
+    // Listing mode, no other validation needed
+    return true;
   }
 
   if (opt.codec_name.empty()) {

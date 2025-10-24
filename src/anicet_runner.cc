@@ -34,8 +34,10 @@
 int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
                     int width, const char* color_format, int num_runs,
                     CodecOutput* output) {
-  (void)input_size;    // Unused
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused
+  (void)input_size;
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -62,7 +64,8 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
   }
 
   config.quality = 75;
-  config.method = 4;  // Speed/quality trade-off
+  // Speed/quality trade-off
+  config.method = 4;
 
   WebPPicture picture;
   if (!WebPPictureInit(&picture)) {
@@ -73,7 +76,8 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
 
   picture.width = width;
   picture.height = height;
-  picture.use_argb = 0;  // Use YUV
+  // Use YUV
+  picture.use_argb = 0;
   picture.colorspace = WEBP_YUV420;
 
   // Allocate picture
@@ -160,8 +164,10 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
 int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
                             int height, int width, const char* color_format,
                             int num_runs, CodecOutput* output) {
-  (void)input_size;    // Unused
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused
+  (void)input_size;
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -246,8 +252,10 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
                       int num_runs, CodecOutput* output) {
-  (void)input_size;    // Unused
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused
+  (void)input_size;
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -275,7 +283,8 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
   cinfo.image_width = width;
   cinfo.image_height = height;
   cinfo.input_components = 3;
-  cinfo.in_color_space = JCS_RGB;  // We convert YUV to RGB below
+  // We convert YUV to RGB below
+  cinfo.in_color_space = JCS_RGB;
 
   jpeg_set_defaults(&cinfo);
   jpeg_set_quality(&cinfo, 75, TRUE);
@@ -384,8 +393,10 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
                          int height, int width, const char* color_format,
                          int num_runs, CodecOutput* output) {
-  (void)input_size;    // Unused
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused
+  (void)input_size;
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -417,8 +428,10 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
   param->fpsNum = 30;
   param->fpsDenom = 1;
   param->internalCsp = X265_CSP_I420;
-  param->internalBitDepth = 8;  // Library is compiled for 8-bit
-  param->keyframeMax = 1;       // I-frame only
+  // Library is compiled for 8-bit
+  param->internalBitDepth = 8;
+  // I-frame only
+  param->keyframeMax = 1;
   param->bframes = 0;
 
   x265_encoder* encoder = x265_encoder_open(param);
@@ -514,7 +527,8 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
                       int num_runs, CodecOutput* output) {
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -550,8 +564,10 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   config.frame_rate_numerator = 30;
   config.frame_rate_denominator = 1;
   config.encoder_bit_depth = 8;
-  config.intra_period_length = -1;                 // I-frame only
-  config.intra_refresh_type = SVT_AV1_KF_REFRESH;  // Key frame refresh
+  // I-frame only
+  config.intra_period_length = -1;
+  // Key frame refresh
+  config.intra_refresh_type = SVT_AV1_KF_REFRESH;
 
   res = svt_av1_enc_set_parameter(handle, &config);
   if (res != EB_ErrorNone) {
@@ -587,7 +603,8 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
 
   EbBufferHeaderType input_buf;
   memset(&input_buf, 0, sizeof(input_buf));
-  input_buf.size = sizeof(EbBufferHeaderType);  // Required for version check
+  // Required for version check
+  input_buf.size = sizeof(EbBufferHeaderType);
   input_buf.p_buffer = (uint8_t*)&input_picture;
   input_buf.n_filled_len = input_size;
   input_buf.n_alloc_len = input_size;
@@ -679,8 +696,10 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
                                 int height, int width, const char* color_format,
                                 int num_runs, CodecOutput* output) {
-  (void)input_size;    // Unused
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused
+  (void)input_size;
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -760,8 +779,10 @@ int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
   param->fpsNum = 30;
   param->fpsDenom = 1;
   param->internalCsp = X265_CSP_I420;
-  param->internalBitDepth = 8;  // Library is compiled for 8-bit
-  param->keyframeMax = 1;       // I-frame only
+  // Library is compiled for 8-bit
+  param->internalBitDepth = 8;
+  // I-frame only
+  param->keyframeMax = 1;
   param->bframes = 0;
 
   x265_encoder* encoder = encoder_open(param);
@@ -860,8 +881,10 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
                                    size_t input_size, int height, int width,
                                    const char* color_format, int num_runs,
                                    CodecOutput* output) {
-  (void)input_size;    // Unused
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused
+  (void)input_size;
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -983,8 +1006,10 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
 int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
                            int num_runs, CodecOutput* output) {
-  (void)input_size;    // Unused
-  (void)color_format;  // Unused (yuv420p assumed)
+  // Unused
+  (void)input_size;
+  // Unused (yuv420p assumed)
+  (void)color_format;
 
   // Validate inputs
   if (!input_buffer || !output) {
@@ -1056,7 +1081,8 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
   }
 
   config.quality = 75;
-  config.method = 4;  // Speed/quality trade-off
+  // Speed/quality trade-off
+  config.method = 4;
 
   WebPPicture picture;
   // Call the internal function directly with version parameter
@@ -1069,7 +1095,8 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
 
   picture.width = width;
   picture.height = height;
-  picture.use_argb = 0;  // Use YUV
+  // Use YUV
+  picture.use_argb = 0;
   picture.colorspace = WEBP_YUV420;
 
   // Allocate picture
@@ -1176,8 +1203,10 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   format.codec_name = codec_name;
   format.color_format = color_format;
   format.quality = 75;
-  format.bitrate = -1;     // Auto-calculate from quality
-  format.debug_level = 0;  // Quiet
+  // Auto-calculate from quality
+  format.bitrate = -1;
+  // Quiet
+  format.debug_level = 0;
 
   AMediaCodec* codec = nullptr;
   int setup_result = android_mediacodec_encode_setup(&format, &codec);
@@ -1231,7 +1260,8 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   PROFILE_RESOURCES_END(mediacodec_total_memory);
   return result;
 #else
-  (void)num_runs;  // Unused on non-Android
+  // Unused on non-Android
+  (void)num_runs;
   fprintf(stderr, "MediaCodec: Not available (Android only)\n");
   return -1;
 #endif

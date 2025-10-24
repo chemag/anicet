@@ -85,7 +85,8 @@ int android_mediacodec_get_color_format(const char* color_format) {
   std::string format(color_format);
   // Planar 4:2:0 (I420, aka yuv420p)
   if (format == "yuv420p" || format == "i420" || format == "iyuv") {
-    return COLOR_FormatYUV420Planar;  // 19
+    // 19
+    return COLOR_FormatYUV420Planar;
   }
 
   // Semiplanar 4:2:0 (NV12 or NV21 share the SAME id; you control the UV order
@@ -94,24 +95,29 @@ int android_mediacodec_get_color_format(const char* color_format) {
   // - NV21 -> VUVU...
   if (format == "nv12" || format == "nv21" || format == "yuv420sp" ||
       format == "yuv420spsemi") {
-    return COLOR_FormatYUV420SemiPlanar;  // 21
+    // 21
+    return COLOR_FormatYUV420SemiPlanar;
   }
 
   // Packed variants (rare; only use if dumpsys says the encoder supports them)
   if (format == "yuv420packedplanar") {
-    return COLOR_FormatYUV420PackedPlanar;  // 20
+    // 20
+    return COLOR_FormatYUV420PackedPlanar;
   }
   if (format == "yuv420packedsemiplanar") {
-    return COLOR_FormatYUV420PackedSemiPlanar;  // 39
+    // 39
+    return COLOR_FormatYUV420PackedSemiPlanar;
   }
 
   // Only choose Flexible if you explicitly asked for it.
   if (format == "yuv420flexible" || format == "flex" || format == "flexible") {
-    return COLOR_FormatYUV420Flexible;  // 0x7F420888
+    // 0x7F420888
+    return COLOR_FormatYUV420Flexible;
   }
 
   // Safe default for buffer input: planar I420
-  return COLOR_FormatYUV420Planar;  // 19
+  // 19
+  return COLOR_FormatYUV420Planar;
 }
 
 // Internal wrapper for C++ code
