@@ -1107,7 +1107,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
 }
 
 // Android MediaCodec encoder - wrapper that adapts
-// android_mediacodec_encode_frame_full()
+// android_mediacodec_encode_frame()
 int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           const char* codec_name, uint8_t* output_buffer,
@@ -1124,15 +1124,14 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
   PROFILE_RESOURCES_START(mediacodec_total_memory);
 
-  // (a) Codec setup
+  // (a) Codec setup - setup ONCE for all frames
   MediaCodecFormat format;
   format.width = width;
   format.height = height;
   format.codec_name = codec_name;
   format.color_format = color_format;
   format.quality = 75;
-  format.bitrate = -1;  // Auto-calculate from quality
-  format.frame_count = 1;
+  format.bitrate = -1;     // Auto-calculate from quality
   format.debug_level = 0;  // Quiet
 
   AMediaCodec* codec = nullptr;
@@ -1145,64 +1144,93 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   // (b) Input conversion - none needed for MediaCodec, it accepts YUV420p
   // directly
 
-  // (c) Actual encoding - run num_runs times
+  // (c) Actual encoding - encode all frames in one call with new API
   int result = 0;
-  uint8_t* mediacodec_buffer = nullptr;
-  size_t mediacodec_size = 0;
-
   PROFILE_RESOURCES_START(mediacodec_encode_cpu);
-  for (int run = 0; run < num_runs; run++) {
-    // Free previous run's buffer if exists
-    if (mediacodec_buffer) {
-      free(mediacodec_buffer);
-      mediacodec_buffer = nullptr;
-    }
 
-    result = android_mediacodec_encode_frame(codec, input_buffer, input_size,
-                                             &format, &mediacodec_buffer,
-                                             &mediacodec_size);
-    if (result != 0) {
-      break;
-    }
+  // Allocate MediaCodecOutput structure and arrays
+  MediaCodecOutput mediacodec_output;
+  mediacodec_output.frame_buffers =
+      (uint8_t**)calloc(num_runs, sizeof(uint8_t*));
+  mediacodec_output.frame_sizes = (size_t*)calloc(num_runs, sizeof(size_t));
+  mediacodec_output.timings =
+      (MediaCodecFrameTiming*)calloc(num_runs, sizeof(MediaCodecFrameTiming));
+  mediacodec_output.num_frames = 0;
 
-    // Save this run's output for verification
-    char filename[256];
-    snprintf(filename, sizeof(filename),
-             "/data/local/tmp/bin/out/output.mediacodec.%d.bin", run);
-    FILE* f = fopen(filename, "wb");
-    if (f) {
-      fwrite(mediacodec_buffer, 1, mediacodec_size, f);
-      fclose(f);
-    }
-  }
-  PROFILE_RESOURCES_END(mediacodec_encode_cpu);
-
-  // (d) Codec cleanup
-  android_mediacodec_encode_cleanup(codec, format.debug_level);
-
-  PROFILE_RESOURCES_END(mediacodec_total_memory);
-
-  if (result != 0) {
-    if (mediacodec_buffer) {
-      free(mediacodec_buffer);
-    }
-    return result;
-  }
-
-  // Check if it fits in caller's buffer (use last run's output)
-  if (mediacodec_size > max_output_size) {
-    fprintf(stderr,
-            "MediaCodec: Output buffer too small (%zu needed, %zu available)\n",
-            mediacodec_size, max_output_size);
-    free(mediacodec_buffer);
+  if (!mediacodec_output.frame_buffers || !mediacodec_output.frame_sizes ||
+      !mediacodec_output.timings) {
+    fprintf(stderr, "MediaCodec: Failed to allocate output arrays\n");
+    free(mediacodec_output.frame_buffers);
+    free(mediacodec_output.frame_sizes);
+    free(mediacodec_output.timings);
+    android_mediacodec_encode_cleanup(codec, format.debug_level);
+    PROFILE_RESOURCES_END(mediacodec_encode_cpu);
+    PROFILE_RESOURCES_END(mediacodec_total_memory);
     return -1;
   }
 
-  // Copy to caller's buffer
-  memcpy(output_buffer, mediacodec_buffer, mediacodec_size);
-  *output_size = mediacodec_size;
-  free(mediacodec_buffer);
-  return 0;
+  // Call new API - encodes all num_runs frames in single session
+  result = android_mediacodec_encode_frame(
+      codec, input_buffer, input_size, &format, num_runs, &mediacodec_output);
+
+  if (result == 0) {
+    // Save each frame to separate file
+    for (int i = 0; i < mediacodec_output.num_frames; i++) {
+      char filename[256];
+      snprintf(filename, sizeof(filename),
+               "/data/local/tmp/bin/out/output.mediacodec.%d.bin", i);
+      FILE* f = fopen(filename, "wb");
+      if (f) {
+        fwrite(mediacodec_output.frame_buffers[i], 1,
+               mediacodec_output.frame_sizes[i], f);
+        fclose(f);
+      }
+
+      // Optionally print timing information
+      if (format.debug_level > 0) {
+        int64_t encode_time_us =
+            mediacodec_output.timings[i].get_output_timestamp_us -
+            mediacodec_output.timings[i].queue_input_timestamp_us;
+        printf("Frame %d: encode time = %lld us\n", i,
+               (long long)encode_time_us);
+      }
+    }
+
+    // Use last frame's output for caller's buffer
+    if (mediacodec_output.num_frames > 0) {
+      int last_idx = mediacodec_output.num_frames - 1;
+      size_t last_size = mediacodec_output.frame_sizes[last_idx];
+      if (last_size > max_output_size) {
+        fprintf(
+            stderr,
+            "MediaCodec: Output buffer too small (%zu needed, %zu available)\n",
+            last_size, max_output_size);
+        result = -1;
+      } else {
+        memcpy(output_buffer, mediacodec_output.frame_buffers[last_idx],
+               last_size);
+        *output_size = last_size;
+      }
+    }
+  } else {
+    fprintf(stderr, "MediaCodec: Encoding failed\n");
+  }
+
+  // Free allocated frame buffers
+  for (int i = 0; i < mediacodec_output.num_frames; i++) {
+    free(mediacodec_output.frame_buffers[i]);
+  }
+  free(mediacodec_output.frame_buffers);
+  free(mediacodec_output.frame_sizes);
+  free(mediacodec_output.timings);
+
+  PROFILE_RESOURCES_END(mediacodec_encode_cpu);
+
+  // (d) Codec cleanup - cleanup ONCE at the end
+  android_mediacodec_encode_cleanup(codec, format.debug_level);
+
+  PROFILE_RESOURCES_END(mediacodec_total_memory);
+  return result;
 #else
   (void)num_runs;  // Unused on non-Android
   fprintf(stderr, "MediaCodec: Not available (Android only)\n");

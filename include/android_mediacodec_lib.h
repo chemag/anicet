@@ -61,9 +61,22 @@ typedef struct {
   const char* color_format;  // Color format string ("yuv420p", "nv12", "nv21")
   int quality;      // Quality 0-100 (used to calculate bitrate if bitrate < 0)
   int bitrate;      // Target bitrate in bps (if < 0, calculated from quality)
-  int frame_count;  // Number of frames to encode (reuses input_buffer)
   int debug_level;  // Debug verbosity (0 = quiet, 1+ = verbose)
 } MediaCodecFormat;
+
+// Per-frame timing information
+typedef struct {
+  int64_t queue_input_timestamp_us;  // Before AMediaCodec_queueInputBuffer()
+  int64_t get_output_timestamp_us;   // After AMediaCodec_getOutputBuffer()
+} MediaCodecFrameTiming;
+
+// MediaCodec encoding output with timing data
+typedef struct {
+  uint8_t** frame_buffers;         // Array of output buffers (one per frame)
+  size_t* frame_sizes;             // Array of output sizes (one per frame)
+  MediaCodecFrameTiming* timings;  // Array of timing data (one per frame)
+  int num_frames;                  // Number of frames encoded
+} MediaCodecOutput;
 
 // Forward declaration for Android MediaCodec
 struct AMediaCodec;
@@ -85,22 +98,25 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* format,
 //
 // Parameters:
 //   codec:         Codec handle from android_mediacodec_encode_setup()
-//   input_buffer:  Raw YUV frame data (single frame, reused frame_count times)
+//   input_buffer:  Raw YUV frame data (single frame, reused num_runs times)
 //   input_size:    Size of input buffer in bytes
-//   format:        Encoding configuration (for frame_count, color_format,
-//   dimensions) output_buffer: Pointer to receive allocated output buffer
-//   (caller must free()) output_size:   Pointer to receive output buffer size
+//   format:        Encoding configuration (color_format, dimensions, etc.)
+//   num_runs:      Number of frames to encode (reuses input_buffer)
+//   output:        Pre-allocated MediaCodecOutput struct (caller allocates
+//   arrays)
 //
 // Returns:
 //   0 on success, non-zero error code on failure
-//   On success, *output_buffer contains encoded data (caller must free())
-//   On failure, *output_buffer is NULL
+//   On success, output->frame_buffers[] contains encoded data for each frame
+//               output->frame_sizes[] contains size of each frame
+//               output->timings[] contains timing data for each frame
+//   Caller is responsible for allocating output arrays and freeing
+//   frame_buffers
 int android_mediacodec_encode_frame(struct AMediaCodec* codec,
                                     const uint8_t* input_buffer,
                                     size_t input_size,
                                     const MediaCodecFormat* format,
-                                    uint8_t** output_buffer,
-                                    size_t* output_size);
+                                    int num_runs, MediaCodecOutput* output);
 
 // Cleanup MediaCodec encoder and free resources
 //
