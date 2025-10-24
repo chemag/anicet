@@ -7,7 +7,7 @@ option(ANICET_STRIP "Strip symbols from anicet binary" ON)
 # Android MediaCodec encoder (Android only) - define first
 if(ANDROID)
     # Build MediaCodec library
-    add_library(android_mediacodec_lib STATIC android_mediacodec_lib.cc)
+    add_library(android_mediacodec_lib STATIC android_mediacodec_lib.cc anicet_common.cc)
 
     set_target_properties(android_mediacodec_lib PROPERTIES
         CXX_STANDARD 17
@@ -34,7 +34,7 @@ if(ANDROID)
 endif()
 
 # Define the anicet executable (always built)
-add_executable(anicet anicet.cpp anicet_runner.cc)
+add_executable(anicet anicet.cpp anicet_runner.cc anicet_common.cc)
 
 # Set C++ standard
 set_target_properties(anicet PROPERTIES

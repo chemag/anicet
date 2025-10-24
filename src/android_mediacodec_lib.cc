@@ -20,6 +20,8 @@
 #include "android_binder_init.h"
 #endif
 
+#include "anicet_common.h"
+
 #define DEFAULT_QUALITY 80
 
 // Color format constants are now defined in android_mediacodec_lib.h
@@ -389,10 +391,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
           uint64_t pts_timestamp_us = frames_sent * 33'000;
 
           // Capture timing BEFORE queueInputBuffer
-          struct timespec ts;
-          clock_gettime(CLOCK_MONOTONIC, &ts);
-          output->timings[frames_sent].input_timestamp_us =
-              ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+          output->timings[frames_sent].input_timestamp_us = anicet_get_timestamp();
 
           AMediaCodec_queueInputBuffer(codec, (size_t)input_buffer_index, 0,
                                        frame_size, pts_timestamp_us, 0);
@@ -455,9 +454,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
             output_buffer_index, codec_output_buffer_size);
 
       // Capture timing AFTER getOutputBuffer
-      struct timespec ts;
-      clock_gettime(CLOCK_MONOTONIC, &ts);
-      int64_t get_output_ts = ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+      int64_t get_output_ts = anicet_get_timestamp();
 
       if (info.size > 0 && codec_output_buffer) {
         const bool is_config =

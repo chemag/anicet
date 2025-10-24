@@ -11,6 +11,9 @@
 // POSIX headers for dynamic loading
 #include <dlfcn.h>
 
+// Common utilities
+#include "anicet_common.h"
+
 // Resource profiling
 #include "resource_profiler.h"
 
@@ -114,10 +117,7 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
   PROFILE_RESOURCES_START(webp_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     WebPMemoryWriter writer;
     WebPMemoryWriterInit(&writer);
@@ -132,9 +132,7 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
     }
 
     // Capture end timestamp
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].output_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector
     output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
@@ -200,10 +198,7 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
   PROFILE_RESOURCES_START(libjpegturbo_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     unsigned char* jpeg_buf = nullptr;
     unsigned long jpeg_size = 0;
@@ -220,9 +215,7 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
     }
 
     // Capture end timestamp
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].output_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector
     output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
@@ -330,10 +323,7 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
   PROFILE_RESOURCES_START(jpegli_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     // Free previous run's buffer if exists
     if (jpeg_buf) {
@@ -352,9 +342,7 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
     jpeg_finish_compress(&cinfo);
 
     // Capture end timestamp
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].output_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector
     output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
@@ -461,10 +449,7 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
 
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     // Force this frame to be IDR
     pic_in->sliceType = X265_TYPE_IDR;
@@ -481,9 +466,7 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
     }
 
     // Capture end timestamp
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].output_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Calculate total size for this frame
     size_t total_size = 0;
@@ -618,10 +601,7 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   // Step 1: Send all input pictures (I-frame only, no EOS between them)
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp when sending input
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     res = svt_av1_enc_send_picture(handle, &input_buf);
     if (res != EB_ErrorNone) {
@@ -651,10 +631,7 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
       res = svt_av1_enc_get_packet(handle, &output_buf, 1);
       if (res == EB_ErrorNone && output_buf && output_buf->n_filled_len > 0) {
         // Capture end timestamp when receiving output
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        output->timings[run].output_timestamp_us =
-            ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+        output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
         // Store output in vector
         output->frame_buffers[run].assign(
@@ -813,10 +790,7 @@ int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
 
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     // Force this frame to be IDR
     pic_in->sliceType = X265_TYPE_IDR;
@@ -832,9 +806,7 @@ int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
     }
 
     // Capture end timestamp
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].output_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Calculate total size for this frame
     size_t total_size = 0;
@@ -953,10 +925,7 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
   PROFILE_RESOURCES_START(libjpegturbo_nonopt_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     unsigned char* jpeg_buf = nullptr;
     unsigned long jpeg_size = 0;
@@ -972,9 +941,7 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
     }
 
     // Capture end timestamp
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].output_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector
     output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
@@ -1134,10 +1101,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
   PROFILE_RESOURCES_START(webp_nonopt_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].input_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].input_timestamp_us = anicet_get_timestamp();
 
     WebPMemoryWriter writer;
     memoryWriterInit(&writer);
@@ -1152,9 +1116,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
     }
 
     // Capture end timestamp
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    output->timings[run].output_timestamp_us =
-        ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector
     output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
