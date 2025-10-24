@@ -187,6 +187,7 @@ struct Options {
   int height = 0;
   std::string color_format;
   std::string codec = "all";            // codec to use (default: all)
+  int num_runs = 1;                     // number of encoding runs (default: 1)
 };
 
 static void print_help(const char* argv0) {
@@ -212,6 +213,7 @@ static void print_help(const char* argv0) {
       "  --codec CODEC            Codec to use: x265, x265-nonopt, svt-av1,\n"
       "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
       "                           webp, webp-nonopt, mediacodec, all (default: all)\n"
+      "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
@@ -351,6 +353,18 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       }
       continue;
     }
+    if (strcmp(argv[i], "--num-runs") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--num-runs needs a number\n");
+        return false;
+      }
+      opt.num_runs = atoi(argv[++i]);
+      if (opt.num_runs < 1) {
+        fprintf(stderr, "--num-runs must be >= 1\n");
+        return false;
+      }
+      continue;
+    }
     fprintf(stderr, "Unknown option: %s\n", argv[i]);
     return false;
   }
@@ -449,7 +463,8 @@ int main(int argc, char** argv) {
         opt.height,
         opt.width,
         opt.color_format.c_str(),
-        opt.codec.c_str()
+        opt.codec.c_str(),
+        opt.num_runs
     );
 
     long t1_ms = now_ms_monotonic();

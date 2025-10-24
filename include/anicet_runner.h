@@ -23,28 +23,32 @@ extern "C" {
 // WebP encoder - optimized
 int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
                     int width, const char* color_format, uint8_t* output_buffer,
-                    size_t* output_size);
+                    size_t* output_size, int num_runs);
 
 // WebP encoder - non-optimized (no SIMD)
 int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
-                           uint8_t* output_buffer, size_t* output_size);
+                           uint8_t* output_buffer, size_t* output_size,
+                           int num_runs);
 
 // libjpeg-turbo encoder (using TurboJPEG API) - optimized
 int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
                             int height, int width, const char* color_format,
-                            uint8_t* output_buffer, size_t* output_size);
+                            uint8_t* output_buffer, size_t* output_size,
+                            int num_runs);
 
 // libjpeg-turbo encoder (using TurboJPEG API) - non-optimized (no SIMD)
 int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
                                    size_t input_size, int height, int width,
                                    const char* color_format,
-                                   uint8_t* output_buffer, size_t* output_size);
+                                   uint8_t* output_buffer, size_t* output_size,
+                                   int num_runs);
 
 // jpegli encoder (JPEG XL's JPEG encoder)
 int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      uint8_t* output_buffer, size_t* output_size);
+                      uint8_t* output_buffer, size_t* output_size,
+                      int num_runs);
 
 // x265 encoder (H.265/HEVC) - optimized
 int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
@@ -59,7 +63,8 @@ int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
 // SVT-AV1 encoder
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      uint8_t* output_buffer, size_t* output_size);
+                      uint8_t* output_buffer, size_t* output_size,
+                      int num_runs);
 
 // Android MediaCodec encoder (Android only)
 // This is a wrapper around android_mediacodec_encode_frame()
@@ -69,7 +74,7 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           const char* codec_name, uint8_t* output_buffer,
-                          size_t* output_size);
+                          size_t* output_size, int num_runs);
 
 // Run encoding experiment with multiple encoders
 // Encodes the same raw YUV420p image using specified encoder(s)
@@ -89,7 +94,7 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
 //   Number of encoding errors (0 = all succeeded)
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
-                      const char* codec_name);
+                      const char* codec_name, int num_runs);
 
 #ifdef __cplusplus
 }

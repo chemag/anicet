@@ -11,6 +11,9 @@
 // POSIX headers for dynamic loading
 #include <dlfcn.h>
 
+// Resource profiling
+#include "resource_profiler.h"
+
 // Encoder library headers
 #include "android_mediacodec_lib.h"
 #include "jpeglib.h"
@@ -30,7 +33,7 @@
 // WebP encoder - writes to caller-provided memory buffer only
 int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
                     int width, const char* color_format, uint8_t* output_buffer,
-                    size_t* output_size) {
+                    size_t* output_size, int num_runs) {
   (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
@@ -42,9 +45,14 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(webp_total_memory);
+
+  // (a) Codec setup
   WebPConfig config;
   if (!WebPConfigInit(&config)) {
     fprintf(stderr, "WebP: Failed to initialize config\n");
+    PROFILE_RESOURCES_END(webp_total_memory);
     return -1;
   }
 
@@ -54,6 +62,7 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
   WebPPicture picture;
   if (!WebPPictureInit(&picture)) {
     fprintf(stderr, "WebP: Failed to initialize picture\n");
+    PROFILE_RESOURCES_END(webp_total_memory);
     return -1;
   }
 
@@ -66,10 +75,11 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
   if (!WebPPictureAlloc(&picture)) {
     fprintf(stderr, "WebP: Failed to allocate picture\n");
     WebPPictureFree(&picture);
+    PROFILE_RESOURCES_END(webp_total_memory);
     return -1;
   }
 
-  // Import YUV420 data manually
+  // (b) Input conversion: Import YUV420 data manually
   const uint8_t* y_plane = input_buffer;
   const uint8_t* u_plane = input_buffer + (width * height);
   const uint8_t* v_plane =
@@ -90,38 +100,61 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
            width / 2);
   }
 
-  WebPMemoryWriter writer;
-  WebPMemoryWriterInit(&writer);
-  picture.writer = WebPMemoryWrite;
-  picture.custom_ptr = &writer;
-
+  // (c) Actual encoding - run num_runs times
   int result = 0;
-  if (!WebPEncode(&config, &picture)) {
-    fprintf(stderr, "WebP: Encoding failed\n");
-    result = -1;
-  } else {
+  PROFILE_RESOURCES_START(webp_encode_cpu);
+  for (int run = 0; run < num_runs; run++) {
+    WebPMemoryWriter writer;
+    WebPMemoryWriterInit(&writer);
+    picture.writer = WebPMemoryWrite;
+    picture.custom_ptr = &writer;
+
+    if (!WebPEncode(&config, &picture)) {
+      fprintf(stderr, "WebP: Encoding failed\n");
+      WebPMemoryWriterClear(&writer);
+      result = -1;
+      break;
+    }
+
     // Check if output buffer is large enough
     if (writer.size > max_output_size) {
       fprintf(stderr,
               "WebP: Output buffer too small (%zu needed, %zu available)\n",
               writer.size, max_output_size);
+      WebPMemoryWriterClear(&writer);
       result = -1;
-    } else {
-      // Copy to caller's buffer
-      memcpy(output_buffer, writer.mem, writer.size);
-      *output_size = writer.size;
+      break;
     }
-  }
 
-  WebPMemoryWriterClear(&writer);
+    // Copy to caller's buffer
+    memcpy(output_buffer, writer.mem, writer.size);
+    *output_size = writer.size;
+
+    // Save output for verification
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/data/local/tmp/bin/out/output.webp.%d.bin", run);
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(writer.mem, 1, writer.size, f);
+      fclose(f);
+    }
+
+    WebPMemoryWriterClear(&writer);
+  }
+  PROFILE_RESOURCES_END(webp_encode_cpu);
+
+  // (d) Codec cleanup
   WebPPictureFree(&picture);
+  PROFILE_RESOURCES_END(webp_total_memory);
   return result;
 }
 
 // libjpeg-turbo encoder - writes to caller-provided memory buffer only
 int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
                             int height, int width, const char* color_format,
-                            uint8_t* output_buffer, size_t* output_size) {
+                            uint8_t* output_buffer, size_t* output_size,
+                            int num_runs) {
   (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
@@ -133,45 +166,75 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(libjpegturbo_total_memory);
+
+  // (a) Codec setup
   tjhandle handle = tjInitCompress();
   if (!handle) {
     fprintf(stderr, "TurboJPEG: Failed to initialize compressor\n");
+    PROFILE_RESOURCES_END(libjpegturbo_total_memory);
     return -1;
   }
 
-  unsigned char* jpeg_buf = nullptr;
-  unsigned long jpeg_size = 0;
+  // (b) Input conversion: None needed - TurboJPEG takes YUV420 directly
 
-  // Compress YUV to JPEG - tjCompressFromYUV allocates output buffer
-  int ret =
-      tjCompressFromYUV(handle, input_buffer, width, 1, height, TJSAMP_420,
-                        &jpeg_buf, &jpeg_size, 75, TJFLAG_FASTDCT);
-  if (ret != 0) {
-    fprintf(stderr, "TurboJPEG: Encoding failed: %s\n", tjGetErrorStr2(handle));
-    tjDestroy(handle);
-    return -1;
-  }
-
+  // (c) Actual encoding - run num_runs times
   int result = 0;
-  if (jpeg_size > max_output_size) {
-    fprintf(stderr,
-            "TurboJPEG: Output buffer too small (%lu needed, %zu available)\n",
-            jpeg_size, max_output_size);
-    result = -1;
-  } else {
+  PROFILE_RESOURCES_START(libjpegturbo_encode_cpu);
+  for (int run = 0; run < num_runs; run++) {
+    unsigned char* jpeg_buf = nullptr;
+    unsigned long jpeg_size = 0;
+
+    // Compress YUV to JPEG - tjCompressFromYUV allocates output buffer
+    int ret =
+        tjCompressFromYUV(handle, input_buffer, width, 1, height, TJSAMP_420,
+                          &jpeg_buf, &jpeg_size, 75, TJFLAG_FASTDCT);
+    if (ret != 0) {
+      fprintf(stderr, "TurboJPEG: Encoding failed: %s\n",
+              tjGetErrorStr2(handle));
+      result = -1;
+      break;
+    }
+
+    if (jpeg_size > max_output_size) {
+      fprintf(
+          stderr,
+          "TurboJPEG: Output buffer too small (%lu needed, %zu available)\n",
+          jpeg_size, max_output_size);
+      tjFree(jpeg_buf);
+      result = -1;
+      break;
+    }
+
     memcpy(output_buffer, jpeg_buf, jpeg_size);
     *output_size = jpeg_size;
-  }
 
-  tjFree(jpeg_buf);
+    // Save output for verification
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/data/local/tmp/bin/out/output.libjpegturbo.%d.bin", run);
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(jpeg_buf, 1, jpeg_size, f);
+      fclose(f);
+    }
+
+    tjFree(jpeg_buf);
+  }
+  PROFILE_RESOURCES_END(libjpegturbo_encode_cpu);
+
+  // (d) Codec cleanup
   tjDestroy(handle);
+  PROFILE_RESOURCES_END(libjpegturbo_total_memory);
   return result;
 }
 
 // jpegli encoder - writes to caller-provided memory buffer only
 int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      uint8_t* output_buffer, size_t* output_size) {
+                      uint8_t* output_buffer, size_t* output_size,
+                      int num_runs) {
   (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
@@ -183,15 +246,15 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(jpegli_total_memory);
+
+  // (a) Codec setup
   struct jpeg_compress_struct cinfo;
   struct jpeg_error_mgr jerr;
 
   cinfo.err = jpeg_std_error(&jerr);
   jpeg_create_compress(&cinfo);
-
-  unsigned char* jpeg_buf = nullptr;
-  unsigned long jpeg_size = 0;
-  jpeg_mem_dest(&cinfo, &jpeg_buf, &jpeg_size);
 
   cinfo.image_width = width;
   cinfo.image_height = height;
@@ -200,9 +263,8 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
 
   jpeg_set_defaults(&cinfo);
   jpeg_set_quality(&cinfo, 75, TRUE);
-  jpeg_start_compress(&cinfo, TRUE);
 
-  // For YUV420, convert to RGB for JPEG encoding
+  // (b) Input conversion: YUV420 to RGB (done once)
   int row_stride = width * 3;
   JSAMPROW row_pointer[1];
   std::vector<unsigned char> rgb_buffer(height * row_stride);
@@ -235,14 +297,47 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
     }
   }
 
-  while (cinfo.next_scanline < cinfo.image_height) {
-    row_pointer[0] = &rgb_buffer[cinfo.next_scanline * row_stride];
-    jpeg_write_scanlines(&cinfo, row_pointer, 1);
-  }
-
-  jpeg_finish_compress(&cinfo);
-
+  // (c) Actual encoding - run num_runs times
+  unsigned char* jpeg_buf = nullptr;
+  unsigned long jpeg_size = 0;
   int result = 0;
+
+  PROFILE_RESOURCES_START(jpegli_encode_cpu);
+  for (int run = 0; run < num_runs; run++) {
+    // Free previous run's buffer if exists
+    if (jpeg_buf) {
+      free(jpeg_buf);
+      jpeg_buf = nullptr;
+    }
+
+    jpeg_mem_dest(&cinfo, &jpeg_buf, &jpeg_size);
+    jpeg_start_compress(&cinfo, TRUE);
+
+    while (cinfo.next_scanline < cinfo.image_height) {
+      row_pointer[0] = &rgb_buffer[cinfo.next_scanline * row_stride];
+      jpeg_write_scanlines(&cinfo, row_pointer, 1);
+    }
+
+    jpeg_finish_compress(&cinfo);
+
+    // Save this run's output for verification
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/data/local/tmp/bin/out/output.jpegli.%d.bin", run);
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(jpeg_buf, 1, jpeg_size, f);
+      fclose(f);
+    }
+
+    // For next iteration, need to reset scanline counter
+    if (run < num_runs - 1) {
+      jpeg_abort_compress(&cinfo);
+    }
+  }
+  PROFILE_RESOURCES_END(jpegli_encode_cpu);
+
+  // Check if last run's output fits
   if (jpeg_size > max_output_size) {
     fprintf(stderr,
             "jpegli: Output buffer too small (%lu needed, %zu available)\n",
@@ -255,7 +350,10 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
     free(jpeg_buf);
   }
 
+  // (d) Codec cleanup
   jpeg_destroy_compress(&cinfo);
+
+  PROFILE_RESOURCES_END(jpegli_total_memory);
   return result;
 }
 
@@ -346,7 +444,8 @@ int anicet_run_x265(const uint8_t* input_buffer, size_t input_size, int height,
 // SVT-AV1 encoder - writes to caller-provided memory buffer only
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      uint8_t* output_buffer, size_t* output_size) {
+                      uint8_t* output_buffer, size_t* output_size,
+                      int num_runs) {
   (void)color_format;  // Unused (yuv420p assumed)
 
   // Validate inputs
@@ -357,6 +456,10 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(svt_av1_total_memory);
+
+  // (a) Codec setup
   EbComponentType* handle = nullptr;
   EbSvtAv1EncConfiguration config;
 
@@ -364,6 +467,7 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   EbErrorType res = svt_av1_enc_init_handle(&handle, &config);
   if (res != EB_ErrorNone || !handle) {
     fprintf(stderr, "SVT-AV1: Failed to initialize encoder handle\n");
+    PROFILE_RESOURCES_END(svt_av1_total_memory);
     return -1;
   }
 
@@ -380,6 +484,7 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   if (res != EB_ErrorNone) {
     fprintf(stderr, "SVT-AV1: Failed to set parameters\n");
     svt_av1_enc_deinit_handle(handle);
+    PROFILE_RESOURCES_END(svt_av1_total_memory);
     return -1;
   }
 
@@ -387,10 +492,12 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   if (res != EB_ErrorNone) {
     fprintf(stderr, "SVT-AV1: Failed to initialize encoder\n");
     svt_av1_enc_deinit_handle(handle);
+    PROFILE_RESOURCES_END(svt_av1_total_memory);
     return -1;
   }
 
-  // SVT-AV1 requires EbSvtIOFormat structure with separate Y/Cb/Cr pointers
+  // (b) Input conversion: SVT-AV1 requires EbSvtIOFormat with separate Y/Cb/Cr
+  // pointers
   EbSvtIOFormat input_picture;
   memset(&input_picture, 0, sizeof(input_picture));
 
@@ -413,38 +520,72 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   input_buf.n_alloc_len = input_size;
   input_buf.pic_type = EB_AV1_KEY_PICTURE;
 
-  res = svt_av1_enc_send_picture(handle, &input_buf);
-  int result = -1;
-  if (res != EB_ErrorNone) {
-    fprintf(stderr, "SVT-AV1: Failed to send picture\n");
-  } else {
-    // Send EOS to flush the encoder
+  // (c) Actual encoding - run num_runs times
+  int result = 0;
+
+  PROFILE_RESOURCES_START(svt_av1_encode_cpu);
+  for (int run = 0; run < num_runs; run++) {
+    // Send one picture
+    res = svt_av1_enc_send_picture(handle, &input_buf);
+    if (res != EB_ErrorNone) {
+      fprintf(stderr, "SVT-AV1: Failed to send picture (run %d)\n", run);
+      result = -1;
+      break;
+    }
+
+    // Send EOS to flush this frame
     EbBufferHeaderType eos_buffer;
     memset(&eos_buffer, 0, sizeof(eos_buffer));
-    eos_buffer.size = sizeof(EbBufferHeaderType);  // Required for version check
+    eos_buffer.size = sizeof(EbBufferHeaderType);
     eos_buffer.flags = EB_BUFFERFLAG_EOS;
-    svt_av1_enc_send_picture(handle, &eos_buffer);
+    res = svt_av1_enc_send_picture(handle, &eos_buffer);
+    if (res != EB_ErrorNone) {
+      fprintf(stderr, "SVT-AV1: Failed to send EOS (run %d)\n", run);
+      result = -1;
+      break;
+    }
 
+    // Get output packet for this frame
     EbBufferHeaderType* output_buf = nullptr;
     res = svt_av1_enc_get_packet(handle, &output_buf, 1);
     if (res == EB_ErrorNone && output_buf && output_buf->n_filled_len > 0) {
-      if (output_buf->n_filled_len > max_output_size) {
-        fprintf(stderr,
-                "SVT-AV1: Output buffer too small (%u needed, %zu available)\n",
-                output_buf->n_filled_len, max_output_size);
-      } else {
-        memcpy(output_buffer, output_buf->p_buffer, output_buf->n_filled_len);
-        *output_size = output_buf->n_filled_len;
-        result = 0;
+      // Save this run's output for verification
+      char filename[256];
+      snprintf(filename, sizeof(filename),
+               "/data/local/tmp/bin/out/output.svtav1.%d.bin", run);
+      FILE* f = fopen(filename, "wb");
+      if (f) {
+        fwrite(output_buf->p_buffer, 1, output_buf->n_filled_len, f);
+        fclose(f);
+      }
+
+      // Keep only the last frame's output
+      if (run == num_runs - 1) {
+        if (output_buf->n_filled_len > max_output_size) {
+          fprintf(
+              stderr,
+              "SVT-AV1: Output buffer too small (%u needed, %zu available)\n",
+              output_buf->n_filled_len, max_output_size);
+          result = -1;
+        } else {
+          memcpy(output_buffer, output_buf->p_buffer, output_buf->n_filled_len);
+          *output_size = output_buf->n_filled_len;
+        }
       }
       svt_av1_enc_release_out_buffer(&output_buf);
     } else {
-      fprintf(stderr, "SVT-AV1: Failed to get output packet\n");
+      fprintf(stderr, "SVT-AV1: Failed to get output packet (run %d)\n", run);
+      result = -1;
+      break;
     }
   }
+  PROFILE_RESOURCES_END(svt_av1_encode_cpu);
 
+  // (d) Codec cleanup
   svt_av1_enc_deinit(handle);
   svt_av1_enc_deinit_handle(handle);
+
+  PROFILE_RESOURCES_END(svt_av1_total_memory);
   return result;
 }
 
@@ -585,8 +726,8 @@ int anicet_run_x265_nonopt(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
                                    size_t input_size, int height, int width,
                                    const char* color_format,
-                                   uint8_t* output_buffer,
-                                   size_t* output_size) {
+                                   uint8_t* output_buffer, size_t* output_size,
+                                   int num_runs) {
   (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
@@ -598,11 +739,16 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
-  // Load libturbojpeg-nonopt.so with RTLD_LOCAL to isolate symbols
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(libjpegturbo_nonopt_total_memory);
+
+  // (a) Codec setup - Load libturbojpeg-nonopt.so with RTLD_LOCAL to isolate
+  // symbols
   void* handle = dlopen("libturbojpeg-nonopt.so", RTLD_NOW | RTLD_LOCAL);
   if (!handle) {
     fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load library: %s\n",
             dlerror());
+    PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
     return -1;
   }
 
@@ -627,6 +773,7 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
     fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load symbols: %s\n",
             dlerror());
     dlclose(handle);
+    PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
     return -1;
   }
 
@@ -635,38 +782,60 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
   if (!tj_handle) {
     fprintf(stderr, "libjpeg-turbo-nonopt: Failed to initialize compressor\n");
     dlclose(handle);
+    PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
     return -1;
   }
 
-  unsigned char* jpeg_buf = nullptr;
-  unsigned long jpeg_size = 0;
+  // (b) Input conversion: None needed - TurboJPEG takes YUV420 directly
 
-  // TJSAMP_420 = 2, TJFLAG_FASTDCT = 2048 (from turbojpeg.h)
-  int ret = compressFromYUV(tj_handle, input_buffer, width, 1, height, 2,
-                            &jpeg_buf, &jpeg_size, 75, 2048);
-  if (ret != 0) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Encoding failed: %s\n",
-            getErrorStr2(tj_handle));
-    tjDestroyFunc(tj_handle);
-    dlclose(handle);
-    return -1;
-  }
-
+  // (c) Actual encoding - run num_runs times
   int result = 0;
-  if (jpeg_size > max_output_size) {
-    fprintf(stderr,
-            "libjpeg-turbo-nonopt: Output buffer too small (%lu needed, %zu "
-            "available)\n",
-            jpeg_size, max_output_size);
-    result = -1;
-  } else {
+  PROFILE_RESOURCES_START(libjpegturbo_nonopt_encode_cpu);
+  for (int run = 0; run < num_runs; run++) {
+    unsigned char* jpeg_buf = nullptr;
+    unsigned long jpeg_size = 0;
+
+    // TJSAMP_420 = 2, TJFLAG_FASTDCT = 2048 (from turbojpeg.h)
+    int ret = compressFromYUV(tj_handle, input_buffer, width, 1, height, 2,
+                              &jpeg_buf, &jpeg_size, 75, 2048);
+    if (ret != 0) {
+      fprintf(stderr, "libjpeg-turbo-nonopt: Encoding failed: %s\n",
+              getErrorStr2(tj_handle));
+      result = -1;
+      break;
+    }
+
+    if (jpeg_size > max_output_size) {
+      fprintf(stderr,
+              "libjpeg-turbo-nonopt: Output buffer too small (%lu needed, %zu "
+              "available)\n",
+              jpeg_size, max_output_size);
+      tjFreeFunc(jpeg_buf);
+      result = -1;
+      break;
+    }
+
     memcpy(output_buffer, jpeg_buf, jpeg_size);
     *output_size = jpeg_size;
-  }
 
-  tjFreeFunc(jpeg_buf);
+    // Save output for verification
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/data/local/tmp/bin/out/output.libjpegturbo-nonopt.%d.bin", run);
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(jpeg_buf, 1, jpeg_size, f);
+      fclose(f);
+    }
+
+    tjFreeFunc(jpeg_buf);
+  }
+  PROFILE_RESOURCES_END(libjpegturbo_nonopt_encode_cpu);
+
+  // (d) Codec cleanup
   tjDestroyFunc(tj_handle);
   dlclose(handle);
+  PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
   return result;
 }
 
@@ -674,7 +843,8 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
 // Dynamically loads libwebp-nonopt.so with RTLD_LOCAL for symbol isolation
 int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
-                           uint8_t* output_buffer, size_t* output_size) {
+                           uint8_t* output_buffer, size_t* output_size,
+                           int num_runs) {
   (void)input_size;    // Unused
   (void)color_format;  // Unused (yuv420p assumed)
 
@@ -686,10 +856,14 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
   size_t max_output_size = *output_size;
   *output_size = 0;
 
-  // Load libwebp-nonopt.so with RTLD_LOCAL to isolate symbols
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(webp_nonopt_total_memory);
+
+  // (a) Codec setup - Load libwebp-nonopt.so with RTLD_LOCAL to isolate symbols
   void* handle = dlopen("libwebp-nonopt.so", RTLD_NOW | RTLD_LOCAL);
   if (!handle) {
     fprintf(stderr, "webp-nonopt: Failed to load library: %s\n", dlerror());
+    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
     return -1;
   }
 
@@ -723,6 +897,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
       !encode) {
     fprintf(stderr, "webp-nonopt: Failed to load symbols: %s\n", dlerror());
     dlclose(handle);
+    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
     return -1;
   }
 
@@ -733,6 +908,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                           WEBP_ENCODER_ABI_VERSION)) {
     fprintf(stderr, "webp-nonopt: Failed to initialize config\n");
     dlclose(handle);
+    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
     return -1;
   }
 
@@ -744,6 +920,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
   if (!pictureInitInternal(&picture, WEBP_ENCODER_ABI_VERSION)) {
     fprintf(stderr, "webp-nonopt: Failed to initialize picture\n");
     dlclose(handle);
+    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
     return -1;
   }
 
@@ -757,10 +934,11 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
     fprintf(stderr, "webp-nonopt: Failed to allocate picture\n");
     pictureFree(&picture);
     dlclose(handle);
+    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
     return -1;
   }
 
-  // Import YUV420 data manually
+  // (b) Input conversion: Import YUV420 data manually
   const uint8_t* y_plane = input_buffer;
   const uint8_t* u_plane = input_buffer + (width * height);
   const uint8_t* v_plane =
@@ -781,33 +959,55 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
            width / 2);
   }
 
-  WebPMemoryWriter writer;
-  memoryWriterInit(&writer);
-  picture.writer = memoryWrite;
-  picture.custom_ptr = &writer;
-
+  // (c) Actual encoding - run num_runs times
   int result = 0;
-  if (!encode(&config, &picture)) {
-    fprintf(stderr, "webp-nonopt: Encoding failed\n");
-    result = -1;
-  } else {
+  PROFILE_RESOURCES_START(webp_nonopt_encode_cpu);
+  for (int run = 0; run < num_runs; run++) {
+    WebPMemoryWriter writer;
+    memoryWriterInit(&writer);
+    picture.writer = memoryWrite;
+    picture.custom_ptr = &writer;
+
+    if (!encode(&config, &picture)) {
+      fprintf(stderr, "webp-nonopt: Encoding failed\n");
+      memoryWriterClear(&writer);
+      result = -1;
+      break;
+    }
+
     // Check if output buffer is large enough
     if (writer.size > max_output_size) {
       fprintf(
           stderr,
           "webp-nonopt: Output buffer too small (%zu needed, %zu available)\n",
           writer.size, max_output_size);
+      memoryWriterClear(&writer);
       result = -1;
-    } else {
-      // Copy to caller's buffer
-      memcpy(output_buffer, writer.mem, writer.size);
-      *output_size = writer.size;
+      break;
     }
-  }
 
-  memoryWriterClear(&writer);
+    // Copy to caller's buffer
+    memcpy(output_buffer, writer.mem, writer.size);
+    *output_size = writer.size;
+
+    // Save output for verification
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/data/local/tmp/bin/out/output.webp-nonopt.%d.bin", run);
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(writer.mem, 1, writer.size, f);
+      fclose(f);
+    }
+
+    memoryWriterClear(&writer);
+  }
+  PROFILE_RESOURCES_END(webp_nonopt_encode_cpu);
+
+  // (d) Codec cleanup
   pictureFree(&picture);
   dlclose(handle);
+  PROFILE_RESOURCES_END(webp_nonopt_total_memory);
   return result;
 }
 
@@ -816,7 +1016,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           const char* codec_name, uint8_t* output_buffer,
-                          size_t* output_size) {
+                          size_t* output_size, int num_runs) {
   // Validate inputs
   if (!input_buffer || !output_buffer || !output_size || !codec_name) {
     return -1;
@@ -826,6 +1026,10 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   *output_size = 0;
 
 #ifdef __ANDROID__
+  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
+  PROFILE_RESOURCES_START(mediacodec_total_memory);
+
+  // (a) Codec setup
   MediaCodecFormat format;
   format.width = width;
   format.height = height;
@@ -836,17 +1040,61 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   format.frame_count = 1;
   format.debug_level = 0;  // Quiet
 
-  // android_mediacodec_encode_frame_full allocates its own buffer
+  AMediaCodec* codec = nullptr;
+  int setup_result = android_mediacodec_encode_setup(&format, &codec);
+  if (setup_result != 0) {
+    PROFILE_RESOURCES_END(mediacodec_total_memory);
+    return setup_result;
+  }
+
+  // (b) Input conversion - none needed for MediaCodec, it accepts YUV420p
+  // directly
+
+  // (c) Actual encoding - run num_runs times
+  int result = 0;
   uint8_t* mediacodec_buffer = nullptr;
   size_t mediacodec_size = 0;
 
-  int ret = android_mediacodec_encode_frame_full(
-      input_buffer, input_size, &format, &mediacodec_buffer, &mediacodec_size);
-  if (ret != 0) {
-    return ret;
+  PROFILE_RESOURCES_START(mediacodec_encode_cpu);
+  for (int run = 0; run < num_runs; run++) {
+    // Free previous run's buffer if exists
+    if (mediacodec_buffer) {
+      free(mediacodec_buffer);
+      mediacodec_buffer = nullptr;
+    }
+
+    result = android_mediacodec_encode_frame(codec, input_buffer, input_size,
+                                             &format, &mediacodec_buffer,
+                                             &mediacodec_size);
+    if (result != 0) {
+      break;
+    }
+
+    // Save this run's output for verification
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/data/local/tmp/bin/out/output.mediacodec.%d.bin", run);
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(mediacodec_buffer, 1, mediacodec_size, f);
+      fclose(f);
+    }
+  }
+  PROFILE_RESOURCES_END(mediacodec_encode_cpu);
+
+  // (d) Codec cleanup
+  android_mediacodec_encode_cleanup(codec, format.debug_level);
+
+  PROFILE_RESOURCES_END(mediacodec_total_memory);
+
+  if (result != 0) {
+    if (mediacodec_buffer) {
+      free(mediacodec_buffer);
+    }
+    return result;
   }
 
-  // Check if it fits in caller's buffer
+  // Check if it fits in caller's buffer (use last run's output)
   if (mediacodec_size > max_output_size) {
     fprintf(stderr,
             "MediaCodec: Output buffer too small (%zu needed, %zu available)\n",
@@ -861,6 +1109,7 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   free(mediacodec_buffer);
   return 0;
 #else
+  (void)num_runs;  // Unused on non-Android
   fprintf(stderr, "MediaCodec: Not available (Android only)\n");
   return -1;
 #endif
@@ -869,7 +1118,7 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
 // Main experiment function - uses all sub-runners
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
-                      const char* codec_name) {
+                      const char* codec_name, int num_runs) {
   // Validate inputs
   if (!buffer || buf_size == 0 || height <= 0 || width <= 0 || !color_format ||
       !codec_name) {
@@ -914,7 +1163,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- WebP ---\n");
     size_t output_size = output_buffer_size;
     if (anicet_run_webp(buffer, buf_size, height, width, color_format,
-                        output_buffer, &output_size) == 0) {
+                        output_buffer, &output_size, num_runs) == 0) {
       printf("WebP: Encoded to %zu bytes (%.2f%% of original)\n", output_size,
              (output_size * 100.0) / buf_size);
     } else {
@@ -928,7 +1177,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- WebP (nonopt) ---\n");
     size_t output_size = output_buffer_size;
     if (anicet_run_webp_nonopt(buffer, buf_size, height, width, color_format,
-                               output_buffer, &output_size) == 0) {
+                               output_buffer, &output_size, num_runs) == 0) {
       printf("WebP (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
@@ -942,7 +1191,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- libjpeg-turbo ---\n");
     size_t output_size = output_buffer_size;
     if (anicet_run_libjpegturbo(buffer, buf_size, height, width, color_format,
-                                output_buffer, &output_size) == 0) {
+                                output_buffer, &output_size, num_runs) == 0) {
       printf("TurboJPEG: Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
@@ -957,7 +1206,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     size_t output_size = output_buffer_size;
     if (anicet_run_libjpegturbo_nonopt(buffer, buf_size, height, width,
                                        color_format, output_buffer,
-                                       &output_size) == 0) {
+                                       &output_size, num_runs) == 0) {
       printf("TurboJPEG (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
@@ -971,7 +1220,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- jpegli ---\n");
     size_t output_size = output_buffer_size;
     if (anicet_run_jpegli(buffer, buf_size, height, width, color_format,
-                          output_buffer, &output_size) == 0) {
+                          output_buffer, &output_size, num_runs) == 0) {
       printf("jpegli: Encoded to %zu bytes (%.2f%% of original)\n", output_size,
              (output_size * 100.0) / buf_size);
     } else {
@@ -1013,7 +1262,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- SVT-AV1 ---\n");
     size_t output_size = output_buffer_size;
     if (anicet_run_svtav1(buffer, buf_size, height, width, color_format,
-                          output_buffer, &output_size) == 0) {
+                          output_buffer, &output_size, num_runs) == 0) {
       printf("SVT-AV1: Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
@@ -1029,7 +1278,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     size_t output_size = output_buffer_size;
     if (anicet_run_mediacodec(buffer, buf_size, height, width, color_format,
                               "c2.android.hevc.encoder", output_buffer,
-                              &output_size) == 0) {
+                              &output_size, num_runs) == 0) {
       printf("MediaCodec: Encoded to %zu bytes (%.2f%% of original)\n",
              output_size, (output_size * 100.0) / buf_size);
     } else {
