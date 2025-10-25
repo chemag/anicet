@@ -1,6 +1,7 @@
 // anicet.cpp
 
 #include <fcntl.h>
+#include <getopt.h>
 #include <sched.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -280,7 +281,7 @@ static void print_help(const char* argv0) {
       "  --no-dump-output         Do not write output files to disk\n"
       "  --dump-output-dir DIR    Directory for output files (default: exe directory)\n"
       "  --dump-output-prefix PFX Prefix for output files (default: anicet.output)\n"
-      "  -d, --debug              Increase debug verbosity (can be repeated)\n"
+      "  -d, --debug              Increase debug verbosity (can be repeated: -d -d or -dd)\n"
       "  --quiet                  Disable all debug output (sets debug level to 0)\n"
       "  --version                Show version information\n"
       "  -h, --help               Show help\n\n"
@@ -289,197 +290,199 @@ static void print_help(const char* argv0) {
       argv0, argv0);
 }
 
-static bool starts_with(const char* s, const char* pfx) {
-  return strncmp(s, pfx, strlen(pfx)) == 0;
-}
-
 static bool parse_cli(int argc, char** argv, Options& opt) {
-  int i = 1;
-  for (; i < argc; ++i) {
-    if (strcmp(argv[i], "--") == 0) {
-      ++i;
-      break;
+  // Define long options
+  static struct option long_options[] = {
+    {"help", no_argument, nullptr, 'h'},
+    {"version", no_argument, nullptr, 'v'},
+    {"json", no_argument, nullptr, 'j'},
+    {"tag", required_argument, nullptr, 't'},
+    {"cpus", required_argument, nullptr, 'c'},
+    {"nice", required_argument, nullptr, 'n'},
+    {"timeout-ms", required_argument, nullptr, 'T'},
+    {"simpleperf", no_argument, nullptr, 's'},
+    {"no-simpleperf", no_argument, nullptr, 'S'},
+    {"simpleperf-events", required_argument, nullptr, 'e'},
+    {"image", required_argument, nullptr, 'i'},
+    {"width", required_argument, nullptr, 'w'},
+    {"height", required_argument, nullptr, 'H'},
+    {"color-format", required_argument, nullptr, 'f'},
+    {"codec", required_argument, nullptr, 'C'},
+    {"num-runs", required_argument, nullptr, 'N'},
+    {"dump-output", no_argument, nullptr, 'D'},
+    {"no-dump-output", no_argument, nullptr, 'O'},
+    {"dump-output-dir", required_argument, nullptr, 'r'},
+    {"dump-output-prefix", required_argument, nullptr, 'p'},
+    {"debug", no_argument, nullptr, 'd'},
+    {"quiet", no_argument, nullptr, 'q'},
+    {nullptr, 0, nullptr, 0}
+  };
+
+  // Preprocess argv to expand -dd, -ddd into -d -d -d
+  std::vector<char*> new_argv;
+  std::vector<std::string> expanded_args;
+  new_argv.push_back(argv[0]);
+
+  for (int i = 1; i < argc; i++) {
+    // Check for -dd, -ddd, etc.
+    if (argv[i][0] == '-' && argv[i][1] == 'd' && argv[i][2] == 'd') {
+      // Count consecutive 'd' characters
+      int d_count = 0;
+      for (size_t j = 1; argv[i][j] == 'd'; j++) {
+        d_count++;
+      }
+      // Check if it's only 'd' characters (valid -dd format)
+      if (argv[i][1 + d_count] == '\0') {
+        // Expand -dd into multiple -d
+        for (int j = 0; j < d_count; j++) {
+          expanded_args.push_back("-d");
+          new_argv.push_back(const_cast<char*>(expanded_args.back().c_str()));
+        }
+        continue;
+      }
     }
-    if (strcmp(argv[i], "--json") == 0) {
-      opt.json = true;
-      continue;
-    }
-    if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-      print_help(argv[0]);
-      exit(0);
-    }
-    if (strcmp(argv[i], "--version") == 0) {
-      printf("anicet version %s\n", ANICET_VERSION);
-      exit(0);
-    }
-    if (starts_with(argv[i], "--tag")) {
-      std::string kv;
-      if (strcmp(argv[i], "--tag") == 0) {
-        if (i + 1 >= argc) {
+    new_argv.push_back(argv[i]);
+  }
+
+  int new_argc = new_argv.size();
+  char** new_argv_ptr = new_argv.data();
+
+  // Parse options using getopt_long
+  int opt_char;
+  int option_index = 0;
+
+  while ((opt_char = getopt_long(new_argc, new_argv_ptr, "hd", long_options, &option_index)) != -1) {
+    switch (opt_char) {
+      case 'h':
+        print_help(argv[0]);
+        exit(0);
+
+      case 'v':
+        printf("anicet version %s\n", ANICET_VERSION);
+        exit(0);
+
+      case 'j':
+        opt.json = true;
+        break;
+
+      case 't': {
+        // Parse tag key=val
+        std::string kv(optarg);
+        size_t p = kv.find('=');
+        if (p == std::string::npos) {
           fprintf(stderr, "--tag needs key=val\n");
           return false;
         }
-        kv = argv[++i];
-      } else {
-        const char* eq = strchr(argv[i], '=');
-        if (!eq) {
-          fprintf(stderr, "--tag needs key=val\n");
+        opt.tags.emplace_back(kv.substr(0, p), kv.substr(p + 1));
+        break;
+      }
+
+      case 'c':
+        opt.cpus = optarg;
+        break;
+
+      case 'n':
+        opt.nice = atoi(optarg);
+        break;
+
+      case 'T':
+        opt.timeout_ms = atoi(optarg);
+        break;
+
+      case 's':
+        opt.use_simpleperf = true;
+        break;
+
+      case 'S':
+        opt.use_simpleperf = false;
+        break;
+
+      case 'e':
+        opt.simpleperf_events = optarg;
+        break;
+
+      case 'i':
+        opt.image_file = optarg;
+        break;
+
+      case 'w':
+        opt.width = atoi(optarg);
+        break;
+
+      case 'H':
+        opt.height = atoi(optarg);
+        break;
+
+      case 'f':
+        opt.color_format = optarg;
+        break;
+
+      case 'C': {
+        opt.codec = optarg;
+        // Validate codec name
+        std::set<std::string> valid_codecs = {
+          "x265-8bit", "x265-8bit-nonopt", "svt-av1", "libjpeg-turbo",
+          "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
+          "mediacodec", "all"
+        };
+        if (valid_codecs.find(opt.codec) == valid_codecs.end()) {
+          fprintf(stderr, "Invalid codec: %s\n", opt.codec.c_str());
           return false;
         }
-        kv = eq + 1;
+        break;
       }
-      size_t p = kv.find('=');
-      if (p == std::string::npos) {
-        fprintf(stderr, "--tag needs key=val\n");
+
+      case 'N':
+        opt.num_runs = atoi(optarg);
+        if (opt.num_runs < 1) {
+          fprintf(stderr, "--num-runs must be >= 1\n");
+          return false;
+        }
+        break;
+
+      case 'D':
+        opt.dump_output = true;
+        break;
+
+      case 'O':
+        opt.dump_output = false;
+        break;
+
+      case 'r':
+        opt.dump_output_dir = optarg;
+        break;
+
+      case 'p':
+        opt.dump_output_prefix = optarg;
+        break;
+
+      case 'd':
+        opt.debug++;
+        break;
+
+      case 'q':
+        opt.debug = 0;
+        break;
+
+      case '?':
+        // getopt_long already printed an error message
         return false;
-      }
-      opt.tags.emplace_back(kv.substr(0, p), kv.substr(p + 1));
-      continue;
-    }
-    if (strcmp(argv[i], "--cpus") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--cpus needs a list\n");
+
+      default:
         return false;
-      }
-      opt.cpus = argv[++i];
-      continue;
     }
-    if (strcmp(argv[i], "--nice") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--nice needs N\n");
-        return false;
-      }
-      opt.nice = atoi(argv[++i]);
-      continue;
-    }
-    if (strcmp(argv[i], "--timeout-ms") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--timeout-ms needs N\n");
-        return false;
-      }
-      opt.timeout_ms = atoi(argv[++i]);
-      continue;
-    }
-    if (strcmp(argv[i], "--simpleperf") == 0) {
-      opt.use_simpleperf = true;
-      continue;
-    }
-    if (strcmp(argv[i], "--no-simpleperf") == 0) {
-      opt.use_simpleperf = false;
-      continue;
-    }
-    if (strcmp(argv[i], "--simpleperf-events") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--simpleperf-events needs event list\n");
-        return false;
-      }
-      opt.simpleperf_events = argv[++i];
-      continue;
-    }
-    if (strcmp(argv[i], "--image") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--image needs a file path\n");
-        return false;
-      }
-      opt.image_file = argv[++i];
-      continue;
-    }
-    if (strcmp(argv[i], "--width") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--width needs N\n");
-        return false;
-      }
-      opt.width = atoi(argv[++i]);
-      continue;
-    }
-    if (strcmp(argv[i], "--height") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--height needs N\n");
-        return false;
-      }
-      opt.height = atoi(argv[++i]);
-      continue;
-    }
-    if (strcmp(argv[i], "--color-format") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--color-format needs a format\n");
-        return false;
-      }
-      opt.color_format = argv[++i];
-      continue;
-    }
-    if (strcmp(argv[i], "--codec") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--codec needs a codec name\n");
-        return false;
-      }
-      opt.codec = argv[++i];
-      // Validate codec name
-      std::set<std::string> valid_codecs = {
-        "x265-8bit", "x265-8bit-nonopt", "svt-av1", "libjpeg-turbo",
-        "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
-        "mediacodec", "all"
-      };
-      if (valid_codecs.find(opt.codec) == valid_codecs.end()) {
-        fprintf(stderr, "Invalid codec: %s\n", opt.codec.c_str());
-        return false;
-      }
-      continue;
-    }
-    if (strcmp(argv[i], "--num-runs") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--num-runs needs a number\n");
-        return false;
-      }
-      opt.num_runs = atoi(argv[++i]);
-      if (opt.num_runs < 1) {
-        fprintf(stderr, "--num-runs must be >= 1\n");
-        return false;
-      }
-      continue;
-    }
-    if (strcmp(argv[i], "--dump-output") == 0) {
-      opt.dump_output = true;
-      continue;
-    }
-    if (strcmp(argv[i], "--no-dump-output") == 0) {
-      opt.dump_output = false;
-      continue;
-    }
-    if (strcmp(argv[i], "--dump-output-dir") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--dump-output-dir needs a directory path\n");
-        return false;
-      }
-      opt.dump_output_dir = argv[++i];
-      continue;
-    }
-    if (strcmp(argv[i], "--dump-output-prefix") == 0) {
-      if (i + 1 >= argc) {
-        fprintf(stderr, "--dump-output-prefix needs a prefix string\n");
-        return false;
-      }
-      opt.dump_output_prefix = argv[++i];
-      continue;
-    }
-    if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
-      // Increment debug level (can be repeated: -d -d -d for level 3)
-      opt.debug++;
-      continue;
-    }
-    if (strcmp(argv[i], "--quiet") == 0) {
-      opt.debug = 0;
-      continue;
-    }
-    fprintf(stderr, "Unknown option: %s\n", argv[i]);
-    return false;
   }
 
   // Command is optional if media parameters are provided
   bool has_media_params = !opt.image_file.empty() && opt.width > 0 &&
                           opt.height > 0 && !opt.color_format.empty();
 
-  if (i >= argc) {
+  // Collect any remaining non-option arguments as command
+  for (int i = optind; i < new_argc; ++i) {
+    opt.cmd.emplace_back(new_argv_ptr[i]);
+  }
+
+  if (opt.cmd.empty()) {
     // No command provided - check if we have media parameters
     if (!has_media_params) {
       fprintf(stderr, "Missing -- and command, or --image/--width/--height/--color-format\n");
@@ -488,18 +491,13 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     return true;
   }
 
-  // Command provided - collect it
-  for (; i < argc; ++i) {
-    opt.cmd.emplace_back(argv[i]);
-  }
-
   // Can't have both command and media parameters
   if (has_media_params && !opt.cmd.empty()) {
     fprintf(stderr, "Cannot specify both command and media parameters\n");
     return false;
   }
 
-  return !opt.cmd.empty() || has_media_params;
+  return true;
 }
 
 
