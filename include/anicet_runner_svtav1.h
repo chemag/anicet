@@ -11,7 +11,7 @@
 // SVT-AV1 encoder
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      int num_runs, bool dump_output, CodecOutput* output);
+                      int num_runs, CodecOutput* output);
 
 #endif  // __cplusplus
 

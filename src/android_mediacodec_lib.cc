@@ -302,7 +302,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
                                     const uint8_t* input_buffer,
                                     size_t input_size,
                                     const MediaCodecFormat* fmt, int num_runs,
-                                    bool dump_output, CodecOutput* output) {
+                                    CodecOutput* output) {
   // Initialize output - clear vectors and pre-allocate space
   output->frame_buffers.clear();
   output->frame_buffers.resize(num_runs);
@@ -482,14 +482,14 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
   // Copy frame buffers to output structure using vectors
   // Resize to actual number of frames received (may be less than num_runs)
   // Only copy frame_buffers if dump_output is true to save memory
-  if (dump_output) {
+  if (output->dump_output) {
     output->frame_buffers.resize(frames_recv);
   }
   output->frame_sizes.resize(frames_recv);
   output->timings.resize(frames_recv);
 
   for (int i = 0; i < frames_recv; i++) {
-    if (dump_output) {
+    if (output->dump_output) {
       output->frame_buffers[i] = frame_buffers[i];  // Vector copy
     }
     output->frame_sizes[i] = frame_buffers[i].size();
@@ -546,8 +546,8 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
 
   // Encode single frame (num_runs=1)
   // Set dump_output=true since caller needs the buffer
-  int result = android_mediacodec_encode_frame(
-      codec, input_buffer, input_size, format, 1, true, &mediacodec_output);
+  int result = android_mediacodec_encode_frame(codec, input_buffer, input_size,
+                                               format, 1, &mediacodec_output);
 
   // Copy first frame's output to caller's buffer (malloc for caller)
   if (result == 0 && mediacodec_output.num_frames() > 0) {
@@ -593,14 +593,12 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
                                     const uint8_t* input_buffer,
                                     size_t input_size,
                                     const MediaCodecFormat* format,
-                                    int num_runs, bool dump_output,
-                                    CodecOutput* output) {
+                                    int num_runs, CodecOutput* output) {
   (void)codec;
   (void)input_buffer;
   (void)input_size;
   (void)format;
   (void)num_runs;
-  (void)dump_output;
   output->frame_buffers.clear();
   output->frame_sizes.clear();
   output->timings.clear();

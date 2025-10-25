@@ -3,9 +3,10 @@
 
 #include "anicet_runner_webp.h"
 
+#include <dlfcn.h>
+
 #include <cstdio>
 #include <cstring>
-#include <dlfcn.h>
 
 #include "anicet_common.h"
 #include "resource_profiler.h"
@@ -14,7 +15,7 @@
 // WebP encoder - writes to caller-provided memory buffer only
 int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
                     int width, const char* color_format, int num_runs,
-                    bool dump_output, CodecOutput* output) {
+                    CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -113,7 +114,7 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector (only copy buffer if dump_output is true)
-    if (dump_output) {
+    if (output->dump_output) {
       output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
     }
     output->frame_sizes[run] = writer.size;
@@ -132,8 +133,7 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
 // Dynamically loads libwebp-nonopt.so with RTLD_LOCAL for symbol isolation
 int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
-                           int num_runs, bool dump_output,
-                           CodecOutput* output) {
+                           int num_runs, CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -280,7 +280,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector (only copy buffer if dump_output is true)
-    if (dump_output) {
+    if (output->dump_output) {
       output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
     }
     output->frame_sizes[run] = writer.size;

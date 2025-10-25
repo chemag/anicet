@@ -12,7 +12,7 @@
 int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           const char* codec_name, int num_runs,
-                          bool dump_output, CodecOutput* output);
+                          CodecOutput* output);
 
 #endif  // __cplusplus
 

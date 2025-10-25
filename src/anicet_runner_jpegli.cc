@@ -14,7 +14,7 @@
 // jpegli encoder - writes to caller-provided memory buffer only
 int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      int num_runs, bool dump_output, CodecOutput* output) {
+                      int num_runs, CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -115,7 +115,7 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
     // Store output in vector (only copy buffer if dump_output is true)
-    if (dump_output) {
+    if (output->dump_output) {
       output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
     }
     output->frame_sizes[run] = jpeg_size;

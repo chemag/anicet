@@ -7,12 +7,12 @@
 #include <cstring>
 
 // Individual codec runners
-#include "anicet_runner_webp.h"
-#include "anicet_runner_libjpegturbo.h"
 #include "anicet_runner_jpegli.h"
-#include "anicet_runner_x265.h"
-#include "anicet_runner_svtav1.h"
+#include "anicet_runner_libjpegturbo.h"
 #include "anicet_runner_mediacodec.h"
+#include "anicet_runner_svtav1.h"
+#include "anicet_runner_webp.h"
+#include "anicet_runner_x265.h"
 
 // Main experiment function - uses all sub-runners
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
@@ -55,8 +55,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_webp) {
     printf("\n--- WebP ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_webp(buffer, buf_size, height, width, color_format, num_runs,
-                        dump_output, &output) == 0 &&
+                        &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("WebP: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
@@ -85,8 +86,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_webp_nonopt) {
     printf("\n--- WebP (nonopt) ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_webp_nonopt(buffer, buf_size, height, width, color_format,
-                               num_runs, dump_output, &output) == 0 &&
+                               num_runs, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("WebP (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
@@ -115,8 +117,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_libjpeg_turbo) {
     printf("\n--- libjpeg-turbo ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_libjpegturbo(buffer, buf_size, height, width, color_format,
-                                num_runs, dump_output, &output) == 0 &&
+                                num_runs, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("TurboJPEG: Encoded to %zu bytes (%.2f%% of original)\n",
@@ -145,9 +148,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_libjpeg_turbo_nonopt) {
     printf("\n--- libjpeg-turbo (nonopt) ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_libjpegturbo_nonopt(buffer, buf_size, height, width,
-                                       color_format, num_runs, dump_output,
-                                       &output) == 0 &&
+                                       color_format, num_runs, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("TurboJPEG (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
@@ -177,8 +180,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_jpegli) {
     printf("\n--- jpegli ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_jpegli(buffer, buf_size, height, width, color_format,
-                          num_runs, dump_output, &output) == 0 &&
+                          num_runs, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("jpegli: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
@@ -207,8 +211,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_x265_8bit) {
     printf("\n--- x265 (H.265/HEVC) 8-bit ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_x265_8bit(buffer, buf_size, height, width, color_format,
-                             num_runs, dump_output, &output) == 0 &&
+                             num_runs, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("x265-8bit: Encoded to %zu bytes (%.2f%% of original)\n",
@@ -237,9 +242,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_x265_8bit_nonopt) {
     printf("\n--- x265 (H.265/HEVC) 8-bit (nonopt) ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_x265_8bit_nonopt(buffer, buf_size, height, width,
-                                    color_format, num_runs, dump_output,
-                                    &output) == 0 &&
+                                    color_format, num_runs, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("x265-8bit (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
@@ -268,8 +273,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_svtav1) {
     printf("\n--- SVT-AV1 ---\n");
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_svtav1(buffer, buf_size, height, width, color_format,
-                          num_runs, dump_output, &output) == 0 &&
+                          num_runs, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("SVT-AV1: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
@@ -299,8 +305,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- Android MediaCodec ---\n");
 #ifdef __ANDROID__
     CodecOutput output;
+    output.dump_output = dump_output;
     if (anicet_run_mediacodec(buffer, buf_size, height, width, color_format,
-                              "c2.android.hevc.encoder", num_runs, dump_output,
+                              "c2.android.hevc.encoder", num_runs,
                               &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];

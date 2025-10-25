@@ -11,12 +11,12 @@
 // x265 encoder (H.265/HEVC) 8-bit - optimized
 int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
                          int height, int width, const char* color_format,
-                         int num_runs, bool dump_output, CodecOutput* output);
+                         int num_runs, CodecOutput* output);
 
 // x265 encoder (H.265/HEVC) 8-bit - non-optimized (no assembly)
 int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
                                 int height, int width, const char* color_format,
-                                int num_runs, bool dump_output, CodecOutput* output);
+                                int num_runs, CodecOutput* output);
 
 #endif  // __cplusplus
 
