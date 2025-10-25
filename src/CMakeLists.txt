@@ -55,6 +55,7 @@ set_target_properties(anicet PROPERTIES
 # Include directories for anicet
 target_include_directories(anicet PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_BINARY_DIR}/include
     ${CMAKE_INSTALL_PREFIX}/include
 )
 

@@ -31,7 +31,13 @@ else()
     message(STATUS "Using default NDK path: ${ANDROID_NDK_PATH}")
 endif()
 
-project(anicet-suite VERSION 1.0.0 LANGUAGES CXX)
+project(anicet-suite VERSION 0.0 LANGUAGES CXX)
+
+# Generate version header
+configure_file(
+    "${CMAKE_SOURCE_DIR}/include/anicet_version.h.in"
+    "${CMAKE_BINARY_DIR}/include/anicet_version.h"
+)
 
 # Build configuration
 set(CMAKE_CXX_STANDARD 17)

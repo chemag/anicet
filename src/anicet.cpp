@@ -27,6 +27,9 @@
 // Android MediaCodec library for binder cleanup
 #include "android_mediacodec_lib.h"
 
+// Version information
+#include "anicet_version.h"
+
 
 // small utilities
 static long now_ms_monotonic() {
@@ -279,6 +282,7 @@ static void print_help(const char* argv0) {
       "  --dump-output-prefix PFX Prefix for output files (default: anicet.output)\n"
       "  -d, --debug              Increase debug verbosity (can be repeated)\n"
       "  --quiet                  Disable all debug output (sets debug level to 0)\n"
+      "  --version                Show version information\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
@@ -302,6 +306,10 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     }
     if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
       print_help(argv[0]);
+      exit(0);
+    }
+    if (strcmp(argv[i], "--version") == 0) {
+      printf("anicet version %s\n", ANICET_VERSION);
       exit(0);
     }
     if (starts_with(argv[i], "--tag")) {
