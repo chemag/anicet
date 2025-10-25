@@ -104,7 +104,8 @@ int android_mediacodec_encode_frame(struct AMediaCodec* codec,
                                     const uint8_t* input_buffer,
                                     size_t input_size,
                                     const MediaCodecFormat* format,
-                                    int num_runs, CodecOutput* output);
+                                    int num_runs, bool dump_output,
+                                    CodecOutput* output);
 
 // Cleanup MediaCodec encoder and free resources
 //

@@ -36,7 +36,7 @@
 // WebP encoder - writes to caller-provided memory buffer only
 int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
                     int width, const char* color_format, int num_runs,
-                    CodecOutput* output) {
+                    bool dump_output, CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -134,8 +134,10 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
-    // Store output in vector
-    output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
+    // Store output in vector (only copy buffer if dump_output is true)
+    if (dump_output) {
+      output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
+    }
     output->frame_sizes[run] = writer.size;
 
     WebPMemoryWriterClear(&writer);
@@ -151,7 +153,8 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
 // libjpeg-turbo encoder - writes to caller-provided memory buffer only
 int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
                             int height, int width, const char* color_format,
-                            int num_runs, CodecOutput* output) {
+                            int num_runs, bool dump_output,
+                            CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -207,8 +210,10 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
-    // Store output in vector
-    output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
+    // Store output in vector (only copy buffer if dump_output is true)
+    if (dump_output) {
+      output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
+    }
     output->frame_sizes[run] = jpeg_size;
 
     tjFree(jpeg_buf);
@@ -224,7 +229,7 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
 // jpegli encoder - writes to caller-provided memory buffer only
 int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      int num_runs, CodecOutput* output) {
+                      int num_runs, bool dump_output, CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -324,8 +329,10 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
-    // Store output in vector
-    output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
+    // Store output in vector (only copy buffer if dump_output is true)
+    if (dump_output) {
+      output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
+    }
     output->frame_sizes[run] = jpeg_size;
 
     // For next iteration, need to reset scanline counter
@@ -350,7 +357,7 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
 // x265 encoder (8-bit) - writes to caller-provided memory buffer only
 int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
                          int height, int width, const char* color_format,
-                         int num_runs, CodecOutput* output) {
+                         int num_runs, bool dump_output, CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -444,13 +451,16 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
       total_size += nals[i].sizeBytes;
     }
 
-    // Copy all NAL units directly to output vector
-    output->frame_buffers[run].resize(total_size);
-    size_t offset = 0;
-    for (uint32_t i = 0; i < num_nals; i++) {
-      memcpy(output->frame_buffers[run].data() + offset, nals[i].payload,
-             nals[i].sizeBytes);
-      offset += nals[i].sizeBytes;
+    // Copy all NAL units directly to output vector (only if dump_output is
+    // true)
+    if (dump_output) {
+      output->frame_buffers[run].resize(total_size);
+      size_t offset = 0;
+      for (uint32_t i = 0; i < num_nals; i++) {
+        memcpy(output->frame_buffers[run].data() + offset, nals[i].payload,
+               nals[i].sizeBytes);
+        offset += nals[i].sizeBytes;
+      }
     }
     output->frame_sizes[run] = total_size;
   }
@@ -469,7 +479,7 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
 // SVT-AV1 encoder - writes to caller-provided memory buffer only
 int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
                       int height, int width, const char* color_format,
-                      int num_runs, CodecOutput* output) {
+                      int num_runs, bool dump_output, CodecOutput* output) {
   // Unused (yuv420p assumed)
   (void)color_format;
 
@@ -593,10 +603,12 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
         // Capture end timestamp when receiving output
         output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
-        // Store output in vector
-        output->frame_buffers[run].assign(
-            output_buf->p_buffer,
-            output_buf->p_buffer + output_buf->n_filled_len);
+        // Store output in vector (only copy buffer if dump_output is true)
+        if (dump_output) {
+          output->frame_buffers[run].assign(
+              output_buf->p_buffer,
+              output_buf->p_buffer + output_buf->n_filled_len);
+        }
         output->frame_sizes[run] = output_buf->n_filled_len;
 
         svt_av1_enc_release_out_buffer(&output_buf);
@@ -622,7 +634,8 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
 // Dynamically loads libx265-8bit-nonopt.so with RTLD_LOCAL for symbol isolation
 int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
                                 int height, int width, const char* color_format,
-                                int num_runs, CodecOutput* output) {
+                                int num_runs, bool dump_output,
+                                CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -764,13 +777,16 @@ int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
       total_size += nals[i].sizeBytes;
     }
 
-    // Copy all NAL units directly to output vector
-    output->frame_buffers[run].resize(total_size);
-    size_t offset = 0;
-    for (uint32_t i = 0; i < num_nals; i++) {
-      memcpy(output->frame_buffers[run].data() + offset, nals[i].payload,
-             nals[i].sizeBytes);
-      offset += nals[i].sizeBytes;
+    // Copy all NAL units directly to output vector (only if dump_output is
+    // true)
+    if (dump_output) {
+      output->frame_buffers[run].resize(total_size);
+      size_t offset = 0;
+      for (uint32_t i = 0; i < num_nals; i++) {
+        memcpy(output->frame_buffers[run].data() + offset, nals[i].payload,
+               nals[i].sizeBytes);
+        offset += nals[i].sizeBytes;
+      }
     }
     output->frame_sizes[run] = total_size;
   }
@@ -792,7 +808,7 @@ int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
                                    size_t input_size, int height, int width,
                                    const char* color_format, int num_runs,
-                                   CodecOutput* output) {
+                                   bool dump_output, CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -883,8 +899,10 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
-    // Store output in vector
-    output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
+    // Store output in vector (only copy buffer if dump_output is true)
+    if (dump_output) {
+      output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
+    }
     output->frame_sizes[run] = jpeg_size;
 
     tjFreeFunc(jpeg_buf);
@@ -902,7 +920,8 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
 // Dynamically loads libwebp-nonopt.so with RTLD_LOCAL for symbol isolation
 int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
                            int height, int width, const char* color_format,
-                           int num_runs, CodecOutput* output) {
+                           int num_runs, bool dump_output,
+                           CodecOutput* output) {
   // Unused
   (void)input_size;
   // Unused (yuv420p assumed)
@@ -1048,8 +1067,10 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
-    // Store output in vector
-    output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
+    // Store output in vector (only copy buffer if dump_output is true)
+    if (dump_output) {
+      output->frame_buffers[run].assign(writer.mem, writer.mem + writer.size);
+    }
     output->frame_sizes[run] = writer.size;
 
     memoryWriterClear(&writer);
@@ -1068,7 +1089,7 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
 int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
                           int height, int width, const char* color_format,
                           const char* codec_name, int num_runs,
-                          CodecOutput* output) {
+                          bool dump_output, CodecOutput* output) {
   // Validate inputs
   if (!input_buffer || !output || !codec_name) {
     return -1;
@@ -1105,8 +1126,8 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   PROFILE_RESOURCES_START(mediacodec_encode_cpu);
 
   // Call new API - encodes all num_runs frames in single session
-  result = android_mediacodec_encode_frame(codec, input_buffer, input_size,
-                                           &format, num_runs, output);
+  result = android_mediacodec_encode_frame(
+      codec, input_buffer, input_size, &format, num_runs, dump_output, output);
 
   if (result == 0) {
     // Optionally print timing information
@@ -1181,7 +1202,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- WebP ---\n");
     CodecOutput output;
     if (anicet_run_webp(buffer, buf_size, height, width, color_format, num_runs,
-                        &output) == 0 &&
+                        dump_output, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("WebP: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
@@ -1211,7 +1232,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- WebP (nonopt) ---\n");
     CodecOutput output;
     if (anicet_run_webp_nonopt(buffer, buf_size, height, width, color_format,
-                               num_runs, &output) == 0 &&
+                               num_runs, dump_output, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("WebP (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
@@ -1241,7 +1262,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- libjpeg-turbo ---\n");
     CodecOutput output;
     if (anicet_run_libjpegturbo(buffer, buf_size, height, width, color_format,
-                                num_runs, &output) == 0 &&
+                                num_runs, dump_output, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("TurboJPEG: Encoded to %zu bytes (%.2f%% of original)\n",
@@ -1271,7 +1292,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- libjpeg-turbo (nonopt) ---\n");
     CodecOutput output;
     if (anicet_run_libjpegturbo_nonopt(buffer, buf_size, height, width,
-                                       color_format, num_runs, &output) == 0 &&
+                                       color_format, num_runs, dump_output,
+                                       &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("TurboJPEG (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
@@ -1302,7 +1324,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- jpegli ---\n");
     CodecOutput output;
     if (anicet_run_jpegli(buffer, buf_size, height, width, color_format,
-                          num_runs, &output) == 0 &&
+                          num_runs, dump_output, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("jpegli: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
@@ -1332,7 +1354,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- x265 (H.265/HEVC) 8-bit ---\n");
     CodecOutput output;
     if (anicet_run_x265_8bit(buffer, buf_size, height, width, color_format,
-                             num_runs, &output) == 0 &&
+                             num_runs, dump_output, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("x265-8bit: Encoded to %zu bytes (%.2f%% of original)\n",
@@ -1362,7 +1384,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- x265 (H.265/HEVC) 8-bit (nonopt) ---\n");
     CodecOutput output;
     if (anicet_run_x265_8bit_nonopt(buffer, buf_size, height, width,
-                                    color_format, num_runs, &output) == 0 &&
+                                    color_format, num_runs, dump_output,
+                                    &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("x265-8bit (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
@@ -1393,7 +1416,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     printf("\n--- SVT-AV1 ---\n");
     CodecOutput output;
     if (anicet_run_svtav1(buffer, buf_size, height, width, color_format,
-                          num_runs, &output) == 0 &&
+                          num_runs, dump_output, &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
       printf("SVT-AV1: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
@@ -1424,7 +1447,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 #ifdef __ANDROID__
     CodecOutput output;
     if (anicet_run_mediacodec(buffer, buf_size, height, width, color_format,
-                              "c2.android.hevc.encoder", num_runs,
+                              "c2.android.hevc.encoder", num_runs, dump_output,
                               &output) == 0 &&
         output.num_frames() > 0) {
       size_t last_size = output.frame_sizes[output.num_frames() - 1];
