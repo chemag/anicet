@@ -42,45 +42,43 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
   cinfo.image_width = input->width;
   cinfo.image_height = input->height;
   cinfo.input_components = 3;
-  // We convert YUV to RGB below
-  cinfo.in_color_space = JCS_RGB;
+  // Use YCbCr color space to avoid unnecessary conversion
+  cinfo.in_color_space = JCS_YCbCr;
 
   jpeg_set_defaults(&cinfo);
   jpeg_set_quality(&cinfo, 75, TRUE);
 
-  // (b) Input conversion: YUV420 to RGB (done once)
-  int row_stride = input->width * 3;
-  JSAMPROW row_pointer[1];
-  std::vector<unsigned char> rgb_buffer(input->height * row_stride);
+  // Enable raw data mode for direct YUV420p input
+  cinfo.raw_data_in = TRUE;
 
-  // Simple YUV420 to RGB conversion
+  // Configure sampling factors for YUV420p (4:2:0 subsampling)
+  // Y component: 2x2 sampling (full resolution)
+  cinfo.comp_info[0].h_samp_factor = 2;
+  cinfo.comp_info[0].v_samp_factor = 2;
+  // U component: 1x1 sampling (half resolution)
+  cinfo.comp_info[1].h_samp_factor = 1;
+  cinfo.comp_info[1].v_samp_factor = 1;
+  // V component: 1x1 sampling (half resolution)
+  cinfo.comp_info[2].h_samp_factor = 1;
+  cinfo.comp_info[2].v_samp_factor = 1;
+
+  // (b) Input conversion: Extract YUV420p plane pointers (no conversion needed)
   const uint8_t* y_plane = input->input_buffer;
   const uint8_t* u_plane = input->input_buffer + (input->width * input->height);
   const uint8_t* v_plane = input->input_buffer +
                            (input->width * input->height) +
                            (input->width * input->height / 4);
 
-  for (int y = 0; y < input->height; y++) {
-    for (int x = 0; x < input->width; x++) {
-      int y_val = y_plane[y * input->width + x];
-      int u_val = u_plane[(y / 2) * (input->width / 2) + (x / 2)] - 128;
-      int v_val = v_plane[(y / 2) * (input->width / 2) + (x / 2)] - 128;
+  // MCU rows: max_v_sample * DCTSIZE = 2 * 8 = 16 for Y plane
+  // DCTSIZE is defined in jpeglib.h as 8
+  const int max_lines = 2 * DCTSIZE;
 
-      int r = y_val + (1.370705 * v_val);
-      int g = y_val - (0.698001 * v_val) - (0.337633 * u_val);
-      int b = y_val + (1.732446 * u_val);
-
-      rgb_buffer[y * row_stride + x * 3 + 0] = (r < 0)     ? 0
-                                               : (r > 255) ? 255
-                                                           : r;
-      rgb_buffer[y * row_stride + x * 3 + 1] = (g < 0)     ? 0
-                                               : (g > 255) ? 255
-                                                           : g;
-      rgb_buffer[y * row_stride + x * 3 + 2] = (b < 0)     ? 0
-                                               : (b > 255) ? 255
-                                                           : b;
-    }
-  }
+  // Set up row pointers for raw data
+  // We need 3 arrays of row pointers, one for each component (Y, U, V)
+  std::vector<JSAMPROW> y_rows(max_lines);
+  std::vector<JSAMPROW> u_rows(DCTSIZE);
+  std::vector<JSAMPROW> v_rows(DCTSIZE);
+  JSAMPARRAY plane_pointers[3] = {y_rows.data(), u_rows.data(), v_rows.data()};
 
   // (c) Actual encoding - run num_runs times
   unsigned char* jpeg_buf = nullptr;
@@ -103,9 +101,53 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
     jpeg_mem_dest(&cinfo, &jpeg_buf, &jpeg_size);
     jpeg_start_compress(&cinfo, TRUE);
 
+    // Write raw YUV data in MCU-sized blocks
     while (cinfo.next_scanline < cinfo.image_height) {
-      row_pointer[0] = &rgb_buffer[cinfo.next_scanline * row_stride];
-      jpeg_write_scanlines(&cinfo, row_pointer, 1);
+      // Current Y row (Y plane processes 16 rows at a time)
+      JDIMENSION y_row = cinfo.next_scanline;
+      // Current U/V row (U/V planes process 8 rows at a time, half of Y)
+      JDIMENSION uv_row = y_row / 2;
+
+      // Set up row pointers for Y plane (16 rows)
+      for (int i = 0; i < max_lines; i++) {
+        JDIMENSION row = y_row + i;
+        if (row < cinfo.image_height) {
+          y_rows[i] = const_cast<JSAMPROW>(y_plane + row * input->width);
+        } else {
+          // Padding for incomplete MCU
+          y_rows[i] = const_cast<JSAMPROW>(y_plane + (cinfo.image_height - 1) *
+                                                         input->width);
+        }
+      }
+
+      // Set up row pointers for U plane (8 rows)
+      for (int i = 0; i < DCTSIZE; i++) {
+        JDIMENSION row = uv_row + i;
+        JDIMENSION uv_height = (cinfo.image_height + 1) / 2;
+        if (row < uv_height) {
+          u_rows[i] = const_cast<JSAMPROW>(u_plane + row * (input->width / 2));
+        } else {
+          // Padding for incomplete MCU
+          u_rows[i] = const_cast<JSAMPROW>(u_plane + (uv_height - 1) *
+                                                         (input->width / 2));
+        }
+      }
+
+      // Set up row pointers for V plane (8 rows)
+      for (int i = 0; i < DCTSIZE; i++) {
+        JDIMENSION row = uv_row + i;
+        JDIMENSION uv_height = (cinfo.image_height + 1) / 2;
+        if (row < uv_height) {
+          v_rows[i] = const_cast<JSAMPROW>(v_plane + row * (input->width / 2));
+        } else {
+          // Padding for incomplete MCU
+          v_rows[i] = const_cast<JSAMPROW>(v_plane + (uv_height - 1) *
+                                                         (input->width / 2));
+        }
+      }
+
+      // Write one MCU worth of data
+      jpeg_write_raw_data(&cinfo, plane_pointers, max_lines);
     }
 
     jpeg_finish_compress(&cinfo);
