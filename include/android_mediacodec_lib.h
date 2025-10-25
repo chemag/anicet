@@ -121,6 +121,18 @@ int android_mediacodec_encode_frame(struct AMediaCodec* codec,
 void android_mediacodec_encode_cleanup(struct AMediaCodec* codec,
                                        int debug_level);
 
+// Set global debug level for MediaCodec operations
+//
+// Parameters:
+//   debug_level: Debug verbosity (0 = quiet, 1+ = verbose)
+void android_mediacodec_set_debug_level(int debug_level);
+
+// Get current global debug level for MediaCodec operations
+//
+// Returns:
+//   Current debug level
+int android_mediacodec_get_debug_level(void);
+
 // Full all-in-one encode function (convenience wrapper)
 //
 // Parameters:

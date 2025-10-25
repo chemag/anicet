@@ -128,6 +128,8 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
 //   dump_output_dir:    Directory for output files (default: executable
 //   directory) dump_output_prefix: Prefix for output files (default:
 //   "anicet.output")
+//   debug_level:        Debug output level (0 = disabled, higher = more
+//   verbose)
 //
 // Returns:
 //   Number of encoding errors (0 = all succeeded)
@@ -135,7 +137,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
                       const char* codec_name, int num_runs, bool dump_output,
                       const char* dump_output_dir,
-                      const char* dump_output_prefix);
+                      const char* dump_output_prefix, int debug_level);
 
 #endif  // __cplusplus
 

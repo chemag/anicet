@@ -132,6 +132,14 @@ static int calculate_bitrate(int quality, int width, int height) {
   return android_mediacodec_calculate_bitrate(quality, width, height);
 }
 
+// Public helper: Set global debug level for MediaCodec operations
+void android_mediacodec_set_debug_level(int debug_level) {
+  g_debug_level = debug_level;
+}
+
+// Public helper: Get current global debug level for MediaCodec operations
+int android_mediacodec_get_debug_level(void) { return g_debug_level; }
+
 // Note: android_mediacodec_cleanup_binder() is implemented in
 // android_binder_init.h
 

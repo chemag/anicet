@@ -31,8 +31,8 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
   format.quality = 75;
   // Auto-calculate from quality
   format.bitrate = -1;
-  // Quiet
-  format.debug_level = 0;
+  // Use global debug level
+  format.debug_level = android_mediacodec_get_debug_level();
 
   AMediaCodec* codec = nullptr;
   int setup_result = android_mediacodec_encode_setup(&format, &codec);

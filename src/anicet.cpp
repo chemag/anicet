@@ -211,6 +211,9 @@ static std::map<std::string, long> parse_simpleperf_output(
 }
 
 
+// Default debug level
+#define DEFAULT_DEBUG_LEVEL 0
+
 // CLI parsing
 struct Options {
   std::vector<std::string> cmd;
@@ -242,6 +245,8 @@ struct Options {
   std::string dump_output_dir;
   // prefix for output files (default: anicet.output)
   std::string dump_output_prefix;
+  // debug level (0 = no debug, higher = more verbose)
+  int debug = DEFAULT_DEBUG_LEVEL;
 };
 
 static void print_help(const char* argv0) {
@@ -272,6 +277,8 @@ static void print_help(const char* argv0) {
       "  --no-dump-output         Do not write output files to disk\n"
       "  --dump-output-dir DIR    Directory for output files (default: exe directory)\n"
       "  --dump-output-prefix PFX Prefix for output files (default: anicet.output)\n"
+      "  -d, --debug              Increase debug verbosity (can be repeated)\n"
+      "  --quiet                  Disable all debug output (sets debug level to 0)\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
@@ -447,6 +454,15 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       opt.dump_output_prefix = argv[++i];
       continue;
     }
+    if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+      // Increment debug level (can be repeated: -d -d -d for level 3)
+      opt.debug++;
+      continue;
+    }
+    if (strcmp(argv[i], "--quiet") == 0) {
+      opt.debug = 0;
+      continue;
+    }
     fprintf(stderr, "Unknown option: %s\n", argv[i]);
     return false;
   }
@@ -565,7 +581,8 @@ int main(int argc, char** argv) {
         opt.num_runs,
         opt.dump_output,
         opt.dump_output_dir.c_str(),
-        opt.dump_output_prefix.c_str()
+        opt.dump_output_prefix.c_str(),
+        opt.debug
     );
 
     long t1_ms = now_ms_monotonic();

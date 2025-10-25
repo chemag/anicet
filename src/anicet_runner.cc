@@ -13,19 +13,24 @@
 #include "anicet_runner_svtav1.h"
 #include "anicet_runner_webp.h"
 #include "anicet_runner_x265.h"
+// MediaCodec library for debug level setting
+#include "android_mediacodec_lib.h"
 
 // Main experiment function - uses all sub-runners
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
                       const char* codec_name, int num_runs, bool dump_output,
                       const char* dump_output_dir,
-                      const char* dump_output_prefix) {
+                      const char* dump_output_prefix, int debug_level) {
   // Validate inputs
   if (!buffer || buf_size == 0 || height <= 0 || width <= 0 || !color_format ||
       !codec_name) {
     fprintf(stderr, "Invalid input parameters\n");
     return -1;
   }
+
+  // Set debug level for MediaCodec
+  android_mediacodec_set_debug_level(debug_level);
 
   // Only support yuv420p for now
   if (strcmp(color_format, "yuv420p") != 0) {
