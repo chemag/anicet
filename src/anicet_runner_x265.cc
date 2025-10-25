@@ -188,7 +188,8 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
   auto param_alloc = (x265_param_alloc_t)dlsym(handle, "x265_param_alloc");
   auto param_default_preset =
       (x265_param_default_preset_t)dlsym(handle, "x265_param_default_preset");
-  auto encoder_open = (x265_encoder_open_t)dlsym(handle, "x265_encoder_open");
+  auto encoder_open =
+      (x265_encoder_open_t)dlsym(handle, "x265_encoder_open_215");
   auto picture_alloc =
       (x265_picture_alloc_t)dlsym(handle, "x265_picture_alloc");
   auto picture_init = (x265_picture_init_t)dlsym(handle, "x265_picture_init");
