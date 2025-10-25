@@ -101,22 +101,24 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
 // and reports the compressed size for each
 //
 // Parameters:
-//   buffer:       Raw YUV420p image data
-//   buf_size:     Size of buffer in bytes
-//   height:       Image height in pixels
-//   width:        Image width in pixels
-//   color_format: Color format string (currently only "yuv420p" supported)
-//   codec_name:   Codec to use: "x265", "x265-nonopt", "svt-av1",
-//                 "libjpeg-turbo", "libjpeg-turbo-nonopt", "jpegli",
-//                 "webp", "mediacodec", "all" (default: all encoders)
-//   num_runs:     Number of times to encode the same frame
-//   dump_output:  Write output files to disk (default: false)
+//   buffer:          Raw YUV420p image data
+//   buf_size:        Size of buffer in bytes
+//   height:          Image height in pixels
+//   width:           Image width in pixels
+//   color_format:    Color format string (currently only "yuv420p" supported)
+//   codec_name:      Codec to use: "x265", "x265-nonopt", "svt-av1",
+//                    "libjpeg-turbo", "libjpeg-turbo-nonopt", "jpegli",
+//                    "webp", "mediacodec", "all" (default: all encoders)
+//   num_runs:        Number of times to encode the same frame
+//   dump_output:     Write output files to disk (default: false)
+//   dump_output_dir: Directory for output files (default: executable directory)
 //
 // Returns:
 //   Number of encoding errors (0 = all succeeded)
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
-                      const char* codec_name, int num_runs, bool dump_output);
+                      const char* codec_name, int num_runs, bool dump_output,
+                      const char* dump_output_dir);
 
 #endif  // __cplusplus
 

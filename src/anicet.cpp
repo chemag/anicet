@@ -35,6 +35,25 @@ static long now_ms_monotonic() {
   return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
 }
 
+// Get directory of the executable
+static std::string get_executable_dir() {
+  char path[4096];
+  ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+  if (len == -1) {
+    // Fallback to current directory if readlink fails
+    return ".";
+  }
+  path[len] = '\0';
+
+  // Find last '/' to get directory
+  std::string exe_path(path);
+  size_t last_slash = exe_path.find_last_of('/');
+  if (last_slash == std::string::npos) {
+    return ".";
+  }
+  return exe_path.substr(0, last_slash);
+}
+
 static bool read_file(const std::string& path, std::string& out) {
   int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
   if (fd < 0) return false;
@@ -189,6 +208,7 @@ struct Options {
   std::string codec = "all";            // codec to use (default: all)
   int num_runs = 1;                     // number of encoding runs (default: 1)
   bool dump_output = false;             // dump output files to disk (default: false)
+  std::string dump_output_dir;          // directory for output files (default: exe dir)
 };
 
 static void print_help(const char* argv0) {
@@ -217,6 +237,7 @@ static void print_help(const char* argv0) {
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
       "  --dump-output            Write output files to disk (default: disabled)\n"
       "  --no-dump-output         Do not write output files to disk\n"
+      "  --dump-output-dir DIR    Directory for output files (default: exe directory)\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
@@ -376,6 +397,14 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       opt.dump_output = false;
       continue;
     }
+    if (strcmp(argv[i], "--dump-output-dir") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--dump-output-dir needs a directory path\n");
+        return false;
+      }
+      opt.dump_output_dir = argv[++i];
+      continue;
+    }
     fprintf(stderr, "Unknown option: %s\n", argv[i]);
     return false;
   }
@@ -460,6 +489,11 @@ int main(int argc, char** argv) {
     if (!opt.cpus.empty()) set_affinity_from_cpulist(opt.cpus);
     if (opt.nice != 0) set_nice(opt.nice);
 
+    // Set default dump_output_dir to executable directory if not specified
+    if (opt.dump_output_dir.empty()) {
+      opt.dump_output_dir = get_executable_dir();
+    }
+
     // Read image file
     std::string image_data;
     if (!read_file(opt.image_file, image_data)) {
@@ -476,7 +510,8 @@ int main(int argc, char** argv) {
         opt.color_format.c_str(),
         opt.codec.c_str(),
         opt.num_runs,
-        opt.dump_output
+        opt.dump_output,
+        opt.dump_output_dir.c_str()
     );
 
     long t1_ms = now_ms_monotonic();
