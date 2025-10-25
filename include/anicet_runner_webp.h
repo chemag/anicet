@@ -9,14 +9,11 @@
 #ifdef __cplusplus
 
 // WebP encoder - optimized
-int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
-                    int width, const char* color_format, int num_runs,
-                    CodecOutput* output);
+int anicet_run_webp(const CodecInput* input, int num_runs, CodecOutput* output);
 
 // WebP encoder - non-optimized (no SIMD)
-int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
-                           int height, int width, const char* color_format,
-                           int num_runs, CodecOutput* output);
+int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
+                           CodecOutput* output);
 
 #endif  // __cplusplus
 

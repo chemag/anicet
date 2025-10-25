@@ -13,16 +13,10 @@
 #include "turbojpeg.h"
 
 // libjpeg-turbo encoder - writes to caller-provided memory buffer only
-int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
-                            int height, int width, const char* color_format,
-                            int num_runs, CodecOutput* output) {
-  // Unused
-  (void)input_size;
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
+int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
+                            CodecOutput* output) {
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -58,9 +52,9 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
     unsigned long jpeg_size = 0;
 
     // Compress YUV to JPEG - tjCompressFromYUV allocates output buffer
-    int ret =
-        tjCompressFromYUV(handle, input_buffer, width, 1, height, TJSAMP_420,
-                          &jpeg_buf, &jpeg_size, 75, TJFLAG_FASTDCT);
+    int ret = tjCompressFromYUV(handle, input->input_buffer, input->width, 1,
+                                input->height, TJSAMP_420, &jpeg_buf,
+                                &jpeg_size, 75, TJFLAG_FASTDCT);
     if (ret != 0) {
       fprintf(stderr, "TurboJPEG: Encoding failed: %s\n",
               tjGetErrorStr2(handle));
@@ -90,17 +84,10 @@ int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
 // libjpeg-turbo encoder (non-optimized) - uses dlopen to avoid symbol
 // conflicts Dynamically loads libturbojpeg-nonopt.so with RTLD_LOCAL for
 // symbol isolation
-int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
-                                   size_t input_size, int height, int width,
-                                   const char* color_format, int num_runs,
+int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
                                    CodecOutput* output) {
-  // Unused
-  (void)input_size;
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -172,8 +159,9 @@ int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
     unsigned long jpeg_size = 0;
 
     // TJSAMP_420 = 2, TJFLAG_FASTDCT = 2048 (from turbojpeg.h)
-    int ret = compressFromYUV(tj_handle, input_buffer, width, 1, height, 2,
-                              &jpeg_buf, &jpeg_size, 75, 2048);
+    int ret =
+        compressFromYUV(tj_handle, input->input_buffer, input->width, 1,
+                        input->height, 2, &jpeg_buf, &jpeg_size, 75, 2048);
     if (ret != 0) {
       fprintf(stderr, "libjpeg-turbo-nonopt: Encoding failed: %s\n",
               getErrorStr2(tj_handle));

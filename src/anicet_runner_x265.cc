@@ -13,16 +13,10 @@
 #include "x265.h"
 
 // x265 encoder (8-bit) - writes to caller-provided memory buffer only
-int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
-                         int height, int width, const char* color_format,
-                         int num_runs, CodecOutput* output) {
-  // Unused
-  (void)input_size;
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
+int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
+                         CodecOutput* output) {
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -46,8 +40,8 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
   }
 
   x265_param_default_preset(param, "medium", "zerolatency");
-  param->sourceWidth = width;
-  param->sourceHeight = height;
+  param->sourceWidth = input->width;
+  param->sourceHeight = input->height;
   param->fpsNum = 30;
   param->fpsDenom = 1;
   param->internalCsp = X265_CSP_I420;
@@ -70,13 +64,15 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
 
   // (b) Input conversion - Set up picture planes for YUV420 (8-bit)
   pic_in->bitDepth = 8;
-  pic_in->planes[0] = (void*)input_buffer;
-  pic_in->planes[1] = (void*)(input_buffer + width * height);
+  pic_in->planes[0] = (void*)input->input_buffer;
+  pic_in->planes[1] =
+      (void*)(input->input_buffer + input->width * input->height);
   pic_in->planes[2] =
-      (void*)(input_buffer + width * height + width * height / 4);
-  pic_in->stride[0] = width;
-  pic_in->stride[1] = width / 2;
-  pic_in->stride[2] = width / 2;
+      (void*)(input->input_buffer + input->width * input->height +
+              input->width * input->height / 4);
+  pic_in->stride[0] = input->width;
+  pic_in->stride[1] = input->width / 2;
+  pic_in->stride[2] = input->width / 2;
 
   // (c) Actual encoding - run num_runs times through same encoder
   int result = 0;
@@ -136,16 +132,10 @@ int anicet_run_x265_8bit(const uint8_t* input_buffer, size_t input_size,
 
 // x265 encoder (8-bit, non-optimized) - uses dlopen to avoid symbol conflicts
 // Dynamically loads libx265-8bit-nonopt.so with RTLD_LOCAL for symbol isolation
-int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
-                                int height, int width, const char* color_format,
-                                int num_runs, CodecOutput* output) {
-  // Unused
-  (void)input_size;
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
+int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
+                                CodecOutput* output) {
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -217,8 +207,8 @@ int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
   }
 
   param_default_preset(param, "medium", "zerolatency");
-  param->sourceWidth = width;
-  param->sourceHeight = height;
+  param->sourceWidth = input->width;
+  param->sourceHeight = input->height;
   param->fpsNum = 30;
   param->fpsDenom = 1;
   param->internalCsp = X265_CSP_I420;
@@ -242,13 +232,15 @@ int anicet_run_x265_8bit_nonopt(const uint8_t* input_buffer, size_t input_size,
 
   // (b) Input conversion - Set up picture planes for YUV420 (8-bit)
   pic_in->bitDepth = 8;
-  pic_in->planes[0] = (void*)input_buffer;
-  pic_in->planes[1] = (void*)(input_buffer + width * height);
+  pic_in->planes[0] = (void*)input->input_buffer;
+  pic_in->planes[1] =
+      (void*)(input->input_buffer + input->width * input->height);
   pic_in->planes[2] =
-      (void*)(input_buffer + width * height + width * height / 4);
-  pic_in->stride[0] = width;
-  pic_in->stride[1] = width / 2;
-  pic_in->stride[2] = width / 2;
+      (void*)(input->input_buffer + input->width * input->height +
+              input->width * input->height / 4);
+  pic_in->stride[0] = input->width;
+  pic_in->stride[1] = input->width / 2;
+  pic_in->stride[2] = input->width / 2;
 
   // (c) Actual encoding - run num_runs times through same encoder
   int result = 0;

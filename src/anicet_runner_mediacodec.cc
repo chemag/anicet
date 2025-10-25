@@ -11,12 +11,10 @@
 
 // Android MediaCodec encoder - wrapper that adapts
 // android_mediacodec_encode_frame()
-int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
-                          int height, int width, const char* color_format,
-                          const char* codec_name, int num_runs,
-                          CodecOutput* output) {
+int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
+                          int num_runs, CodecOutput* output) {
   // Validate inputs
-  if (!input_buffer || !output || !codec_name) {
+  if (!input || !input->input_buffer || !output || !codec_name) {
     return -1;
   }
 
@@ -26,10 +24,10 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
 
   // (a) Codec setup - setup ONCE for all frames
   MediaCodecFormat format;
-  format.width = width;
-  format.height = height;
+  format.width = input->width;
+  format.height = input->height;
   format.codec_name = codec_name;
-  format.color_format = color_format;
+  format.color_format = input->color_format;
   format.quality = 75;
   // Auto-calculate from quality
   format.bitrate = -1;
@@ -51,8 +49,8 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   PROFILE_RESOURCES_START(mediacodec_encode_cpu);
 
   // Call new API - encodes all num_runs frames in single session
-  result = android_mediacodec_encode_frame(codec, input_buffer, input_size,
-                                           &format, num_runs, output);
+  result = android_mediacodec_encode_frame(
+      codec, input->input_buffer, input->input_size, &format, num_runs, output);
 
   if (result == 0) {
     // Optionally print timing information
@@ -79,8 +77,6 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
   PROFILE_RESOURCES_END(mediacodec_total_memory);
   return result;
 #else
-  // Unused on non-Android
-  (void)num_runs;
   fprintf(stderr, "MediaCodec: Not available (Android only)\n");
   return -1;
 #endif

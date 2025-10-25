@@ -12,16 +12,10 @@
 #include "resource_profiler.h"
 
 // jpegli encoder - writes to caller-provided memory buffer only
-int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
-                      int height, int width, const char* color_format,
-                      int num_runs, CodecOutput* output) {
-  // Unused
-  (void)input_size;
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
+int anicet_run_jpegli(const CodecInput* input, int num_runs,
+                      CodecOutput* output) {
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -43,8 +37,8 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
   cinfo.err = jpeg_std_error(&jerr);
   jpeg_create_compress(&cinfo);
 
-  cinfo.image_width = width;
-  cinfo.image_height = height;
+  cinfo.image_width = input->width;
+  cinfo.image_height = input->height;
   cinfo.input_components = 3;
   // We convert YUV to RGB below
   cinfo.in_color_space = JCS_RGB;
@@ -53,21 +47,22 @@ int anicet_run_jpegli(const uint8_t* input_buffer, size_t input_size,
   jpeg_set_quality(&cinfo, 75, TRUE);
 
   // (b) Input conversion: YUV420 to RGB (done once)
-  int row_stride = width * 3;
+  int row_stride = input->width * 3;
   JSAMPROW row_pointer[1];
-  std::vector<unsigned char> rgb_buffer(height * row_stride);
+  std::vector<unsigned char> rgb_buffer(input->height * row_stride);
 
   // Simple YUV420 to RGB conversion
-  const uint8_t* y_plane = input_buffer;
-  const uint8_t* u_plane = input_buffer + (width * height);
-  const uint8_t* v_plane =
-      input_buffer + (width * height) + (width * height / 4);
+  const uint8_t* y_plane = input->input_buffer;
+  const uint8_t* u_plane = input->input_buffer + (input->width * input->height);
+  const uint8_t* v_plane = input->input_buffer +
+                           (input->width * input->height) +
+                           (input->width * input->height / 4);
 
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      int y_val = y_plane[y * width + x];
-      int u_val = u_plane[(y / 2) * (width / 2) + (x / 2)] - 128;
-      int v_val = v_plane[(y / 2) * (width / 2) + (x / 2)] - 128;
+  for (int y = 0; y < input->height; y++) {
+    for (int x = 0; x < input->width; x++) {
+      int y_val = y_plane[y * input->width + x];
+      int u_val = u_plane[(y / 2) * (input->width / 2) + (x / 2)] - 128;
+      int v_val = v_plane[(y / 2) * (input->width / 2) + (x / 2)] - 128;
 
       int r = y_val + (1.370705 * v_val);
       int g = y_val - (0.698001 * v_val) - (0.337633 * u_val);

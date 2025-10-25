@@ -13,16 +13,10 @@
 #include "webp/encode.h"
 
 // WebP encoder - writes to caller-provided memory buffer only
-int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
-                    int width, const char* color_format, int num_runs,
+int anicet_run_webp(const CodecInput* input, int num_runs,
                     CodecOutput* output) {
-  // Unused
-  (void)input_size;
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -56,8 +50,8 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
     return -1;
   }
 
-  picture.width = width;
-  picture.height = height;
+  picture.width = input->width;
+  picture.height = input->height;
   // Use YUV
   picture.use_argb = 0;
   picture.colorspace = WEBP_YUV420;
@@ -71,24 +65,26 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
   }
 
   // (b) Input conversion: Import YUV420 data manually
-  const uint8_t* y_plane = input_buffer;
-  const uint8_t* u_plane = input_buffer + (width * height);
-  const uint8_t* v_plane =
-      input_buffer + (width * height) + (width * height / 4);
+  const uint8_t* y_plane = input->input_buffer;
+  const uint8_t* u_plane = input->input_buffer + (input->width * input->height);
+  const uint8_t* v_plane = input->input_buffer +
+                           (input->width * input->height) +
+                           (input->width * input->height / 4);
 
   // Copy Y plane
-  for (int y = 0; y < height; y++) {
-    memcpy(picture.y + y * picture.y_stride, y_plane + y * width, width);
+  for (int y = 0; y < input->height; y++) {
+    memcpy(picture.y + y * picture.y_stride, y_plane + y * input->width,
+           input->width);
   }
   // Copy U plane
-  for (int y = 0; y < height / 2; y++) {
-    memcpy(picture.u + y * picture.uv_stride, u_plane + y * (width / 2),
-           width / 2);
+  for (int y = 0; y < input->height / 2; y++) {
+    memcpy(picture.u + y * picture.uv_stride, u_plane + y * (input->width / 2),
+           input->width / 2);
   }
   // Copy V plane
-  for (int y = 0; y < height / 2; y++) {
-    memcpy(picture.v + y * picture.uv_stride, v_plane + y * (width / 2),
-           width / 2);
+  for (int y = 0; y < input->height / 2; y++) {
+    memcpy(picture.v + y * picture.uv_stride, v_plane + y * (input->width / 2),
+           input->width / 2);
   }
 
   // (c) Actual encoding - run num_runs times
@@ -131,16 +127,10 @@ int anicet_run_webp(const uint8_t* input_buffer, size_t input_size, int height,
 
 // WebP encoder (non-optimized) - uses dlopen to avoid symbol conflicts
 // Dynamically loads libwebp-nonopt.so with RTLD_LOCAL for symbol isolation
-int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
-                           int height, int width, const char* color_format,
-                           int num_runs, CodecOutput* output) {
-  // Unused
-  (void)input_size;
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
+int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
+                           CodecOutput* output) {
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -221,8 +211,8 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
     return -1;
   }
 
-  picture.width = width;
-  picture.height = height;
+  picture.width = input->width;
+  picture.height = input->height;
   // Use YUV
   picture.use_argb = 0;
   picture.colorspace = WEBP_YUV420;
@@ -237,24 +227,26 @@ int anicet_run_webp_nonopt(const uint8_t* input_buffer, size_t input_size,
   }
 
   // (b) Input conversion: Import YUV420 data manually
-  const uint8_t* y_plane = input_buffer;
-  const uint8_t* u_plane = input_buffer + (width * height);
-  const uint8_t* v_plane =
-      input_buffer + (width * height) + (width * height / 4);
+  const uint8_t* y_plane = input->input_buffer;
+  const uint8_t* u_plane = input->input_buffer + (input->width * input->height);
+  const uint8_t* v_plane = input->input_buffer +
+                           (input->width * input->height) +
+                           (input->width * input->height / 4);
 
   // Copy Y plane
-  for (int y = 0; y < height; y++) {
-    memcpy(picture.y + y * picture.y_stride, y_plane + y * width, width);
+  for (int y = 0; y < input->height; y++) {
+    memcpy(picture.y + y * picture.y_stride, y_plane + y * input->width,
+           input->width);
   }
   // Copy U plane
-  for (int y = 0; y < height / 2; y++) {
-    memcpy(picture.u + y * picture.uv_stride, u_plane + y * (width / 2),
-           width / 2);
+  for (int y = 0; y < input->height / 2; y++) {
+    memcpy(picture.u + y * picture.uv_stride, u_plane + y * (input->width / 2),
+           input->width / 2);
   }
   // Copy V plane
-  for (int y = 0; y < height / 2; y++) {
-    memcpy(picture.v + y * picture.uv_stride, v_plane + y * (width / 2),
-           width / 2);
+  for (int y = 0; y < input->height / 2; y++) {
+    memcpy(picture.v + y * picture.uv_stride, v_plane + y * (input->width / 2),
+           input->width / 2);
   }
 
   // (c) Actual encoding - run num_runs times

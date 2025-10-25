@@ -9,14 +9,11 @@
 #ifdef __cplusplus
 
 // libjpeg-turbo encoder (using TurboJPEG API) - optimized
-int anicet_run_libjpegturbo(const uint8_t* input_buffer, size_t input_size,
-                            int height, int width, const char* color_format,
-                            int num_runs, CodecOutput* output);
+int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
+                            CodecOutput* output);
 
 // libjpeg-turbo encoder (using TurboJPEG API) - non-optimized (no SIMD)
-int anicet_run_libjpegturbo_nonopt(const uint8_t* input_buffer,
-                                   size_t input_size, int height, int width,
-                                   const char* color_format, int num_runs,
+int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
                                    CodecOutput* output);
 
 #endif  // __cplusplus

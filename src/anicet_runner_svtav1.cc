@@ -17,14 +17,10 @@
 #include "svt-av1/EbSvtAv1Enc.h"
 
 // SVT-AV1 encoder - writes to caller-provided memory buffer only
-int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
-                      int height, int width, const char* color_format,
-                      int num_runs, CodecOutput* output) {
-  // Unused (yuv420p assumed)
-  (void)color_format;
-
+int anicet_run_svtav1(const CodecInput* input, int num_runs,
+                      CodecOutput* output) {
   // Validate inputs
-  if (!input_buffer || !output) {
+  if (!input || !input->input_buffer || !output) {
     return -1;
   }
 
@@ -52,8 +48,8 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   }
 
   // Modify parameters after getting defaults
-  config.source_width = width;
-  config.source_height = height;
+  config.source_width = input->width;
+  config.source_height = input->height;
   config.frame_rate_numerator = 30;
   config.frame_rate_denominator = 1;
   config.encoder_bit_depth = 8;
@@ -84,23 +80,23 @@ int anicet_run_svtav1(const uint8_t* input_buffer, size_t input_size,
   memset(&input_picture, 0, sizeof(input_picture));
 
   // YUV420p layout: Y plane, then U (Cb), then V (Cr)
-  size_t y_size = width * height;
+  size_t y_size = input->width * input->height;
   size_t uv_size = y_size / 4;
 
-  input_picture.luma = (uint8_t*)input_buffer;
-  input_picture.cb = (uint8_t*)input_buffer + y_size;
-  input_picture.cr = (uint8_t*)input_buffer + y_size + uv_size;
-  input_picture.y_stride = width;
-  input_picture.cb_stride = width / 2;
-  input_picture.cr_stride = width / 2;
+  input_picture.luma = (uint8_t*)input->input_buffer;
+  input_picture.cb = (uint8_t*)input->input_buffer + y_size;
+  input_picture.cr = (uint8_t*)input->input_buffer + y_size + uv_size;
+  input_picture.y_stride = input->width;
+  input_picture.cb_stride = input->width / 2;
+  input_picture.cr_stride = input->width / 2;
 
   EbBufferHeaderType input_buf;
   memset(&input_buf, 0, sizeof(input_buf));
   // Required for version check
   input_buf.size = sizeof(EbBufferHeaderType);
   input_buf.p_buffer = (uint8_t*)&input_picture;
-  input_buf.n_filled_len = input_size;
-  input_buf.n_alloc_len = input_size;
+  input_buf.n_filled_len = input->input_size;
+  input_buf.n_alloc_len = input->input_size;
   input_buf.pic_type = EB_AV1_KEY_PICTURE;
 
   // (c) Actual encoding - run num_runs times
