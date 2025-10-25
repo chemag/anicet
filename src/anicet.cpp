@@ -188,6 +188,7 @@ struct Options {
   std::string color_format;
   std::string codec = "all";            // codec to use (default: all)
   int num_runs = 1;                     // number of encoding runs (default: 1)
+  bool dump_output = false;             // dump output files to disk (default: false)
 };
 
 static void print_help(const char* argv0) {
@@ -214,6 +215,8 @@ static void print_help(const char* argv0) {
       "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
       "                           webp, webp-nonopt, mediacodec, all (default: all)\n"
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
+      "  --dump-output            Write output files to disk (default: disabled)\n"
+      "  --no-dump-output         Do not write output files to disk\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
@@ -365,6 +368,14 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       }
       continue;
     }
+    if (strcmp(argv[i], "--dump-output") == 0) {
+      opt.dump_output = true;
+      continue;
+    }
+    if (strcmp(argv[i], "--no-dump-output") == 0) {
+      opt.dump_output = false;
+      continue;
+    }
     fprintf(stderr, "Unknown option: %s\n", argv[i]);
     return false;
   }
@@ -464,7 +475,8 @@ int main(int argc, char** argv) {
         opt.width,
         opt.color_format.c_str(),
         opt.codec.c_str(),
-        opt.num_runs
+        opt.num_runs,
+        opt.dump_output
     );
 
     long t1_ms = now_ms_monotonic();

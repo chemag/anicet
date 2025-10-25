@@ -106,12 +106,13 @@ int anicet_run_mediacodec(const uint8_t* input_buffer, size_t input_size,
 //                 "libjpeg-turbo", "libjpeg-turbo-nonopt", "jpegli",
 //                 "webp", "mediacodec", "all" (default: all encoders)
 //   num_runs:     Number of times to encode the same frame
+//   dump_output:  Write output files to disk (default: false)
 //
 // Returns:
 //   Number of encoding errors (0 = all succeeded)
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
-                      const char* codec_name, int num_runs);
+                      const char* codec_name, int num_runs, bool dump_output);
 
 #endif  // __cplusplus
 
