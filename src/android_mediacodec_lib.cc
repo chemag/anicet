@@ -21,6 +21,7 @@
 #endif
 
 #include "anicet_common.h"
+#include "resource_profiler.h"
 
 #define DEFAULT_QUALITY 80
 
@@ -314,6 +315,8 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Set debug level for this encoding session
   g_debug_level = fmt->debug_level;
@@ -332,6 +335,10 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 
   // Per-frame buffers (will accumulate data for each frame separately)
   std::vector<std::vector<uint8_t>> frame_buffers(num_runs);
+
+  // Capture resources before encoding
+  ResourceSnapshot encode_start;
+  capture_resources(&encode_start);
 
   // Encoding loop
   AMediaCodecBufferInfo info;
@@ -485,6 +492,18 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 
   DEBUG(1, "Encoded %d frames, received %d frames", frames_sent, frames_recv);
 
+  // Capture resources after encoding
+  ResourceSnapshot encode_end;
+  capture_resources(&encode_end);
+  ResourceDelta encode_delta;
+  compute_delta(&encode_start, &encode_end, &encode_delta);
+
+  // Store CPU time for each frame (average since all frames encoded together)
+  double cpu_per_frame_ms = encode_delta.cpu_time_ms / num_runs;
+  for (int i = 0; i < num_runs; i++) {
+    output->profile_encode_cpu_ms[i] = cpu_per_frame_ms;
+  }
+
   // Copy frame buffers to output structure using vectors
   // Resize to actual number of frames received (may be less than num_runs)
   // Only copy frame_buffers if dump_output is true to save memory
@@ -493,6 +512,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
   }
   output->frame_sizes.resize(frames_recv);
   output->timings.resize(frames_recv);
+  output->profile_encode_cpu_ms.resize(frames_recv);
 
   for (int i = 0; i < frames_recv; i++) {
     if (output->dump_output) {
