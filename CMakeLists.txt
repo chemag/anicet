@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 
+project(anicet-suite VERSION 0.1 LANGUAGES CXX)
+
 # Android NDK detection - MUST happen before project() call
 # Note: CMAKE_TOOLCHAIN_FILE must be passed via command line for cross-compilation
 # This section detects the NDK path for use in ExternalProject builds
@@ -31,7 +33,6 @@ else()
     message(STATUS "Using default NDK path: ${ANDROID_NDK_PATH}")
 endif()
 
-project(anicet-suite VERSION 0.0 LANGUAGES CXX)
 
 # Generate version header
 configure_file(
