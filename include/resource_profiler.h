@@ -20,22 +20,32 @@ struct ResourceSnapshot {
   struct timespec cpu_time;
 
   // Memory (from /proc/self/status)
-  long vm_size_kb;   // Virtual memory size
-  long vm_rss_kb;    // Resident set size (physical memory)
-  long vm_peak_kb;   // Peak virtual memory
-  long rss_peak_kb;  // Peak RSS
+  // Virtual memory size
+  long vm_size_kb;
+  // Resident set size (physical memory)
+  long vm_rss_kb;
+  // Peak virtual memory
+  long vm_peak_kb;
+  // Peak RSS
+  long rss_peak_kb;
 
   // CPU time
-  long user_time_us;    // User CPU time (microseconds)
-  long system_time_us;  // System CPU time (microseconds)
+  // User CPU time (microseconds)
+  long user_time_us;
+  // System CPU time (microseconds)
+  long system_time_us;
 
   // Page faults
-  long minor_faults;  // Minor page faults
-  long major_faults;  // Major page faults (disk I/O)
+  // Minor page faults
+  long minor_faults;
+  // Major page faults (disk I/O)
+  long major_faults;
 
   // Context switches
-  long vol_ctx_switches;    // Voluntary context switches
-  long invol_ctx_switches;  // Involuntary context switches
+  // Voluntary context switches
+  long vol_ctx_switches;
+  // Involuntary context switches
+  long invol_ctx_switches;
 };
 
 // Read memory stats from /proc/self/status

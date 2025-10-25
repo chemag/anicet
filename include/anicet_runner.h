@@ -17,8 +17,10 @@ extern "C" {
 
 // Per-frame timing information
 typedef struct {
-  int64_t input_timestamp_us;   // Before encoding starts
-  int64_t output_timestamp_us;  // After encoding completes
+  // Before encoding starts
+  int64_t input_timestamp_us;
+  // After encoding completes
+  int64_t output_timestamp_us;
 } CodecFrameTiming;
 
 #ifdef __cplusplus
@@ -27,27 +29,35 @@ typedef struct {
 // Codec input data (C++ only)
 // This structure holds all input parameters for encoding
 struct CodecInput {
-  const uint8_t* input_buffer;  // Raw input data
-  size_t input_size;            // Size of input buffer in bytes
-  int height;                   // Image height in pixels
-  int width;                    // Image width in pixels
-  const char* color_format;     // Color format string (e.g., "yuv420p")
+  // Raw input data
+  const uint8_t* input_buffer;
+  // Size of input buffer in bytes
+  size_t input_size;
+  // Image height in pixels
+  int height;
+  // Image width in pixels
+  int width;
+  // Color format string (e.g., "yuv420p")
+  const char* color_format;
 };
 
 // Codec encoding output with timing data (C++ only)
 // This structure uses C++ vectors for automatic memory management
 struct CodecOutput {
-  std::vector<std::vector<uint8_t>>
-      frame_buffers;                // Output buffers (one per frame)
-  std::vector<size_t> frame_sizes;  // Output sizes (one per frame) - redundant
-                                    // but kept for compatibility
-  std::vector<CodecFrameTiming> timings;  // Timing data (one per frame)
-  bool dump_output;  // Whether to copy encoded data to frame_buffers
+  // Output buffers (one per frame)
+  std::vector<std::vector<uint8_t>> frame_buffers;
+  // Output sizes (one per frame) - redundant but kept for compatibility
+  std::vector<size_t> frame_sizes;
+  // Timing data (one per frame)
+  std::vector<CodecFrameTiming> timings;
+  // Whether to copy encoded data to frame_buffers
+  bool dump_output;
 
   // Resource consumption statistics
-  std::vector<double>
-      profile_encode_cpu_ms;   // CPU time per frame (milliseconds)
-  long profile_encode_mem_kb;  // Peak memory usage (kilobytes)
+  // CPU time per frame (milliseconds)
+  std::vector<double> profile_encode_cpu_ms;
+  // Peak memory usage (kilobytes)
+  long profile_encode_mem_kb;
 
   // Helper method to get number of frames
   size_t num_frames() const { return frame_buffers.size(); }

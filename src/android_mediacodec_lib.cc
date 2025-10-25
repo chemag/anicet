@@ -116,7 +116,8 @@ int android_mediacodec_calculate_bitrate(int quality, int width, int height) {
   // TODO(chema): fix bitrate usage for images
   // * default is quality parameter
   // * try CQ (advertised or not)
-  int64_t pps = (int64_t)width * height * 30 /* frame_rate */;
+  // frame_rate
+  int64_t pps = (int64_t)width * height * 30;
 
   // Bits per pixel based on quality
   // Low quality: ~0.05 bpp, High quality: ~0.25 bpp
@@ -206,12 +207,14 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
     // This helps prevent aborts when the media server is still cleaning up from
     // previous client disconnections. Testing shows: 18% at 20ms, 16% at 50ms,
     // 12% at 100ms - media server needs substantial recovery time.
-    usleep(150000);  // 150ms delay
+    // 150ms delay
+    usleep(150000);
   }
 
   // 1. set codec format
   // determine MIME type from codec name
-  const char* mime_type = "video/hevc";  // Default to HEVC
+  // Default to HEVC
+  const char* mime_type = "video/hevc";
   std::string codec_str(fmt->codec_name);
   if (codec_str.find("heic") != std::string::npos) {
     mime_type = "image/vnd.android.heic";
@@ -230,8 +233,8 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
 
   // create format
   AMediaFormat* format = AMediaFormat_new();
-  int bitrate_local =
-      fmt->bitrate;  // Make local copy since function may modify
+  // Make local copy since function may modify
+  int bitrate_local = fmt->bitrate;
   android_mediacodec_set_format(format, mime_type, fmt->width, fmt->height,
                                 fmt->color_format, &bitrate_local,
                                 fmt->quality);
@@ -250,7 +253,8 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
     if (attempt > 0) {
       DEBUG(1, "Retry %d/%d: Waiting 50ms before retrying codec creation...",
             attempt, max_retries - 1);
-      usleep(50000);  // 50ms delay before retry
+      // 50ms delay before retry
+      usleep(50000);
     }
     DEBUG(1,
           "Creating codec: AMediaCodec_createCodecByName(%s) (attempt %d/%d)",
@@ -333,10 +337,12 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
   AMediaCodecBufferInfo info;
   int frames_sent = 0;
   int frames_recv = 0;
-  int current_frame_idx = -1;  // Which frame we're currently receiving
+  // Which frame we're currently receiving
+  int current_frame_idx = -1;
   bool input_eos_sent = false;
   bool output_eos_recv = false;
-  int64_t timeout_us = 10000;  // 10ms timeout
+  // 10ms timeout
+  int64_t timeout_us = 10000;
 
   while (!output_eos_recv) {
     if (!input_eos_sent) {

@@ -194,22 +194,33 @@ static std::map<std::string, long> parse_simpleperf_output(
 struct Options {
   std::vector<std::string> cmd;
   std::vector<std::pair<std::string, std::string>> tags;
-  std::string cpus;                     // e.g. "4-7"
-  int nice = 0;                         // 0 means unchanged
-  int timeout_ms = 0;                   // 0 means no timeout
-  bool json = false;                    // default CSV
-  bool use_simpleperf = false;          // wrap with simpleperf (default false)
-  std::string simpleperf_events;        // comma-separated event list
+  // e.g. "4-7"
+  std::string cpus;
+  // 0 means unchanged
+  int nice = 0;
+  // 0 means no timeout
+  int timeout_ms = 0;
+  // default CSV
+  bool json = false;
+  // wrap with simpleperf (default false)
+  bool use_simpleperf = false;
+  // comma-separated event list
+  std::string simpleperf_events;
   // Media input parameters for library API mode
   std::string image_file;
   int width = 0;
   int height = 0;
   std::string color_format;
-  std::string codec = "all";            // codec to use (default: all)
-  int num_runs = 1;                     // number of encoding runs (default: 1)
-  bool dump_output = false;             // dump output files to disk (default: false)
-  std::string dump_output_dir;          // directory for output files (default: exe dir)
-  std::string dump_output_prefix;       // prefix for output files (default: anicet.output)
+  // codec to use (default: all)
+  std::string codec = "all";
+  // number of encoding runs (default: 1)
+  int num_runs = 1;
+  // dump output files to disk (default: false)
+  bool dump_output = false;
+  // directory for output files (default: exe dir)
+  std::string dump_output_dir;
+  // prefix for output files (default: anicet.output)
+  std::string dump_output_prefix;
 };
 
 static void print_help(const char* argv0) {
@@ -698,7 +709,8 @@ int main(int argc, char** argv) {
   else if (WIFSIGNALED(status_code))
     exit_code = 128 + WTERMSIG(status_code);
 
-  if (timed_out && exit_code == -1) exit_code = 137;  // Killed
+  // Killed
+  if (timed_out && exit_code == -1) exit_code = 137;
 
   // Parse simpleperf output if available
   std::map<std::string, long> simpleperf_metrics;
@@ -750,7 +762,8 @@ int main(int argc, char** argv) {
       printf("%s%s=%s", first ? "" : ",", kv.first.c_str(), kv.second.c_str());
       first = false;
     }
-    if (first) printf("run=na");  // no tags
+    // no tags
+    if (first) printf("run=na");
     printf(",wall_ms=%ld,user_ms=%ld,sys_ms=%ld,vmhwm_kb=%ld,exit=%d", wall_ms,
            user_ms, sys_ms, vmhwm_kb, exit_code);
     // Add simpleperf metrics

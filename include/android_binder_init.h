@@ -75,7 +75,8 @@ inline bool init_binder_thread_pool(int debug_level = 0) {
         int dbg_level = (int)(long)(((void**)arg)[2]);
         BINDER_DEBUG(dbg_level, 2,
                      "Background thread calling joinThreadPool(false)...");
-        fn(ipc, false);  // false = don't become main thread
+        // false = don't become main thread
+        fn(ipc, false);
         BINDER_DEBUG(dbg_level, 2,
                      "Background thread joinThreadPool() returned");
         return nullptr;
@@ -87,7 +88,8 @@ inline bool init_binder_thread_pool(int debug_level = 0) {
         // Don't detach - we need to clean up later
         // Give thread minimal time to start (1ms is enough for thread
         // scheduling)
-        usleep(1000);  // 1ms
+        // 1ms
+        usleep(1000);
         BINDER_DEBUG(debug_level, 2, "Binder thread started successfully");
         return true;
       }
@@ -120,7 +122,8 @@ inline void android_mediacodec_flush_binder() {
         // warnings and helps ensure the media server is left in a clean state
         // for the next client. Testing shows: 18% at 30ms, 16% at 50ms, 12% at
         // 100ms - media server needs substantial time to process cleanup.
-        usleep(150000);  // 150ms
+        // 150ms
+        usleep(150000);
       }
     }
   }
@@ -170,7 +173,8 @@ inline void android_mediacodec_cleanup_binder() {
     // Give the media server a brief moment to finish any pending operations
     // This helps avoid "getAndExecuteCommand returned error" messages when
     // the server tries to send responses to an already-closed connection
-    usleep(10000);  // 10ms delay
+    // 10ms delay
+    usleep(10000);
   }
 }
 

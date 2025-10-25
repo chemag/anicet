@@ -26,7 +26,8 @@ extern "C" int android_init_binder_thread_pool() {
   if (!_ZN7android12ProcessState4selfEv ||
       !_ZN7android12ProcessState15startThreadPoolEv ||
       !_ZN7android12ProcessState27setThreadPoolMaxThreadCountEm) {
-    return 0;  // Symbols not available
+    // Symbols not available
+    return 0;
   }
 
   try {
@@ -38,16 +39,19 @@ extern "C" int android_init_binder_thread_pool() {
     _ZN7android12ProcessState27setThreadPoolMaxThreadCountEm(ps, 1);
     _ZN7android12ProcessState15startThreadPoolEv(ps);
 
-    return 1;  // Success
+    // Success
+    return 1;
   } catch (...) {
-    return 0;  // Failed
+    // Failed
+    return 0;
   }
 }
 
 #else
 
 extern "C" int android_init_binder_thread_pool() {
-  return 0;  // Not Android or disabled
+  // Not Android or disabled
+  return 0;
 }
 
 #endif

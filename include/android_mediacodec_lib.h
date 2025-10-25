@@ -58,13 +58,20 @@ void android_mediacodec_set_format(struct AMediaFormat* format,
 
 // MediaCodec encoding format configuration
 typedef struct {
-  int width;                 // Frame width in pixels
-  int height;                // Frame height in pixels
-  const char* codec_name;    // MediaCodec name (e.g., "c2.qti.heic.encoder")
-  const char* color_format;  // Color format string ("yuv420p", "nv12", "nv21")
-  int quality;      // Quality 0-100 (used to calculate bitrate if bitrate < 0)
-  int bitrate;      // Target bitrate in bps (if < 0, calculated from quality)
-  int debug_level;  // Debug verbosity (0 = quiet, 1+ = verbose)
+  // Frame width in pixels
+  int width;
+  // Frame height in pixels
+  int height;
+  // MediaCodec name (e.g., "c2.qti.heic.encoder")
+  const char* codec_name;
+  // Color format string ("yuv420p", "nv12", "nv21")
+  const char* color_format;
+  // Quality 0-100 (used to calculate bitrate if bitrate < 0)
+  int quality;
+  // Target bitrate in bps (if < 0, calculated from quality)
+  int bitrate;
+  // Debug verbosity (0 = quiet, 1+ = verbose)
+  int debug_level;
 } MediaCodecFormat;
 
 // Forward declaration for Android MediaCodec
