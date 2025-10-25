@@ -209,6 +209,7 @@ struct Options {
   int num_runs = 1;                     // number of encoding runs (default: 1)
   bool dump_output = false;             // dump output files to disk (default: false)
   std::string dump_output_dir;          // directory for output files (default: exe dir)
+  std::string dump_output_prefix;       // prefix for output files (default: anicet.output)
 };
 
 static void print_help(const char* argv0) {
@@ -238,6 +239,7 @@ static void print_help(const char* argv0) {
       "  --dump-output            Write output files to disk (default: disabled)\n"
       "  --no-dump-output         Do not write output files to disk\n"
       "  --dump-output-dir DIR    Directory for output files (default: exe directory)\n"
+      "  --dump-output-prefix PFX Prefix for output files (default: anicet.output)\n"
       "  -h, --help               Show help\n\n"
       "Outputs fields:\n"
       "  wall_ms,user_ms,sys_ms,vmhwm_kb,exit[,simpleperf metrics...]\n",
@@ -405,6 +407,14 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
       opt.dump_output_dir = argv[++i];
       continue;
     }
+    if (strcmp(argv[i], "--dump-output-prefix") == 0) {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "--dump-output-prefix needs a prefix string\n");
+        return false;
+      }
+      opt.dump_output_prefix = argv[++i];
+      continue;
+    }
     fprintf(stderr, "Unknown option: %s\n", argv[i]);
     return false;
   }
@@ -494,6 +504,11 @@ int main(int argc, char** argv) {
       opt.dump_output_dir = get_executable_dir();
     }
 
+    // Set default dump_output_prefix if not specified
+    if (opt.dump_output_prefix.empty()) {
+      opt.dump_output_prefix = "anicet.output";
+    }
+
     // Read image file
     std::string image_data;
     if (!read_file(opt.image_file, image_data)) {
@@ -511,7 +526,8 @@ int main(int argc, char** argv) {
         opt.codec.c_str(),
         opt.num_runs,
         opt.dump_output,
-        opt.dump_output_dir.c_str()
+        opt.dump_output_dir.c_str(),
+        opt.dump_output_prefix.c_str()
     );
 
     long t1_ms = now_ms_monotonic();

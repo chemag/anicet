@@ -18,7 +18,8 @@
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
                       const char* codec_name, int num_runs, bool dump_output,
-                      const char* dump_output_dir) {
+                      const char* dump_output_dir,
+                      const char* dump_output_prefix) {
   // Validate inputs
   if (!buffer || buf_size == 0 || height <= 0 || width <= 0 || !color_format ||
       !codec_name) {
@@ -67,8 +68,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       if (dump_output) {
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
-          snprintf(filename, sizeof(filename), "%s/output.webp.%zu.webp",
-                   dump_output_dir, i);
+          snprintf(filename, sizeof(filename), "%s/%s.webp.%02zu.webp",
+                   dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -98,8 +99,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       if (dump_output) {
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
-          snprintf(filename, sizeof(filename), "%s/output.webp-nonopt.%zu.webp",
-                   dump_output_dir, i);
+          snprintf(filename, sizeof(filename), "%s/%s.webp-nonopt.%02zu.webp",
+                   dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -129,8 +130,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       if (dump_output) {
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
-          snprintf(filename, sizeof(filename),
-                   "%s/output.libjpegturbo.%zu.jpeg", dump_output_dir, i);
+          snprintf(filename, sizeof(filename), "%s/%s.libjpegturbo.%02zu.jpeg",
+                   dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -161,8 +162,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename),
-                   "%s/output.libjpegturbo-nonopt.%zu.jpeg", dump_output_dir,
-                   i);
+                   "%s/%s.libjpegturbo-nonopt.%02zu.jpeg", dump_output_dir,
+                   dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -192,8 +193,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       if (dump_output) {
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
-          snprintf(filename, sizeof(filename), "%s/output.jpegli.%zu.jpeg",
-                   dump_output_dir, i);
+          snprintf(filename, sizeof(filename), "%s/%s.jpegli.%02zu.jpeg",
+                   dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -223,8 +224,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       if (dump_output) {
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
-          snprintf(filename, sizeof(filename), "%s/output.x265-8bit.%zu.265",
-                   dump_output_dir, i);
+          snprintf(filename, sizeof(filename), "%s/%s.x265-8bit.%02zu.265",
+                   dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -255,7 +256,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename),
-                   "%s/output.x265-8bit-nonopt.%zu.265", dump_output_dir, i);
+                   "%s/%s.x265-8bit-nonopt.%02zu.265", dump_output_dir,
+                   dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -285,8 +287,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       if (dump_output) {
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
-          snprintf(filename, sizeof(filename), "%s/output.svtav1.%zu.av1",
-                   dump_output_dir, i);
+          snprintf(filename, sizeof(filename), "%s/%s.svtav1.%02zu.av1",
+                   dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
@@ -318,8 +320,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       if (dump_output) {
         for (size_t i = 0; i < output.num_frames(); i++) {
           char filename[512];
-          snprintf(filename, sizeof(filename), "%s/output.mediacodec.%zu.bin",
-                   dump_output_dir, i);
+          snprintf(filename, sizeof(filename), "%s/%s.mediacodec.%02zu.bin",
+                   dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
