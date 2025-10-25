@@ -76,17 +76,22 @@ static bool read_file(const std::string& path, std::string& out) {
 static long parse_vmhwm_kb_from_status(const std::string& status) {
   // Look for a line like: "VmHWM:\t  123456 kB"
   size_t pos = status.find("VmHWM:");
-  if (pos == std::string::npos) return -1;
+  if (pos == std::string::npos) {
+    return -1;
+  }
   pos += 6;
   // Skip spaces and tabs
-  while (pos < status.size() && (status[pos] == ' ' || status[pos] == '\t'))
+  while (pos < status.size() && (status[pos] == ' ' || status[pos] == '\t')) {
     ++pos;
+  }
   long kb = -1;
   // sscanf on a substring is fine; copy until end of line
   size_t e = status.find('\n', pos);
   std::string line = status.substr(
       pos, (e == std::string::npos) ? std::string::npos : e - pos);
-  if (sscanf(line.c_str(), "%ld", &kb) == 1) return kb;
+  if (sscanf(line.c_str(), "%ld", &kb) == 1) {
+    return kb;
+  }
   return -1;
 }
 
@@ -106,15 +111,21 @@ static bool set_affinity_from_cpulist(const std::string& cpus) {
     if (i < n && cpus[i] == '-') {
       ++i;
       long r = strtol(cpus.c_str() + i, &endptr, 10);
-      if (endptr == cpus.c_str() + i) return false;
+      if (endptr == cpus.c_str() + i) {
+        return false;
+      }
       i = endptr - cpus.c_str();
       b = r;
     }
-    if (a > b) std::swap(a, b);
+    if (a > b) {
+      std::swap(a, b);
+    }
     for (long c = a; c <= b; ++c) {
       CPU_SET((int)c, &set);
     }
-    if (i < n && cpus[i] == ',') ++i;
+    if (i < n && cpus[i] == ',') {
+      ++i;
+    }
   }
   return sched_setaffinity(0, sizeof(set), &set) == 0;
 #else
@@ -138,21 +149,27 @@ static std::map<std::string, long> parse_simpleperf_output(
   size_t pos = 0;
   while (pos < output.size()) {
     size_t eol = output.find('\n', pos);
-    if (eol == std::string::npos) eol = output.size();
+    if (eol == std::string::npos) {
+      eol = output.size();
+    }
     std::string line = output.substr(pos, eol - pos);
     pos = eol + 1;
 
     // Skip empty lines and headers
     if (line.empty() || line.find("Performance counter") != std::string::npos ||
-        line.find("Total test time") != std::string::npos)
+        line.find("Total test time") != std::string::npos) {
       continue;
+    }
 
     // Parse lines like: "  1,234,567  cpu-cycles"
     // Remove leading spaces
     size_t start = 0;
-    while (start < line.size() && (line[start] == ' ' || line[start] == '\t'))
+    while (start < line.size() && (line[start] == ' ' || line[start] == '\t')) {
       ++start;
-    if (start >= line.size()) continue;
+    }
+    if (start >= line.size()) {
+      continue;
+    }
 
     // Find first space after the number
     size_t num_end = start;
@@ -161,10 +178,14 @@ static std::map<std::string, long> parse_simpleperf_output(
     while (num_end < line.size() &&
            (isdigit(line[num_end]) || line[num_end] == ',' ||
             line[num_end] == '.')) {
-      if (line[num_end] != ',') num_str += line[num_end];
+      if (line[num_end] != ',') {
+        num_str += line[num_end];
+      }
       ++num_end;
     }
-    if (!num_str.empty()) value = atol(num_str.c_str());
+    if (!num_str.empty()) {
+      value = atol(num_str.c_str());
+    }
 
     // Find event name
     while (num_end < line.size() &&
@@ -461,7 +482,9 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
 // global for signal forwarding
 static pid_t g_child = -1;
 static void relay_signal(int sig) {
-  if (g_child > 0) kill(g_child, sig);
+  if (g_child > 0) {
+    kill(g_child, sig);
+  }
 }
 
 static void install_signal_handlers() {
@@ -507,8 +530,12 @@ int main(int argc, char** argv) {
   // Library API mode: call anicet_experiment() directly
   if (library_mode && !opt.use_simpleperf) {
     // Apply affinity and nice settings
-    if (!opt.cpus.empty()) set_affinity_from_cpulist(opt.cpus);
-    if (opt.nice != 0) set_nice(opt.nice);
+    if (!opt.cpus.empty()) {
+      set_affinity_from_cpulist(opt.cpus);
+    }
+    if (opt.nice != 0) {
+      set_nice(opt.nice);
+    }
 
     // Set default dump_output_dir to executable directory if not specified
     if (opt.dump_output_dir.empty()) {
@@ -565,7 +592,9 @@ int main(int argc, char** argv) {
         printf("%s%s=%s", first ? "" : ",", kv.first.c_str(), kv.second.c_str());
         first = false;
       }
-      if (first) printf("run=na");
+      if (first) {
+        printf("run=na");
+      }
       printf(",wall_ms=%ld,exit=%d\n", wall_ms, result);
     }
 
@@ -591,8 +620,12 @@ int main(int argc, char** argv) {
 
   if (pid == 0) {
     // Child: apply affinity and nice, then exec
-    if (!opt.cpus.empty()) set_affinity_from_cpulist(opt.cpus);
-    if (opt.nice != 0) set_nice(opt.nice);
+    if (!opt.cpus.empty()) {
+      set_affinity_from_cpulist(opt.cpus);
+    }
+    if (opt.nice != 0) {
+      set_nice(opt.nice);
+    }
 
     // Build argv for execvp
     std::vector<std::string> cmd_vec;
@@ -687,7 +720,9 @@ int main(int argc, char** argv) {
     char path[64];
     snprintf(path, sizeof(path), "/proc/%d/status", pid);
     std::string status;
-    if (read_file(path, status)) vmhwm_kb = parse_vmhwm_kb_from_status(status);
+    if (read_file(path, status)) {
+      vmhwm_kb = parse_vmhwm_kb_from_status(status);
+    }
   }
 
   // Now reap and get rusage
@@ -704,13 +739,16 @@ int main(int argc, char** argv) {
   long sys_ms = ru.ru_stime.tv_sec * 1000L + ru.ru_stime.tv_usec / 1000L;
 
   int exit_code = -1;
-  if (WIFEXITED(status_code))
+  if (WIFEXITED(status_code)) {
     exit_code = WEXITSTATUS(status_code);
-  else if (WIFSIGNALED(status_code))
+  } else if (WIFSIGNALED(status_code)) {
     exit_code = 128 + WTERMSIG(status_code);
+  }
 
   // Killed
-  if (timed_out && exit_code == -1) exit_code = 137;
+  if (timed_out && exit_code == -1) {
+    exit_code = 137;
+  }
 
   // Parse simpleperf output if available
   std::map<std::string, long> simpleperf_metrics;
@@ -731,7 +769,9 @@ int main(int argc, char** argv) {
     auto emit_kv = [&](const char* k, const std::string& v) {
       printf("%s\"%s\":\"", first ? "" : ",", k);
       for (char c : v) {
-        if (c == '"' || c == '\\') putchar('\\');
+        if (c == '"' || c == '\\') {
+          putchar('\\');
+        }
         putchar(c);
       }
       printf("\"");
@@ -763,7 +803,9 @@ int main(int argc, char** argv) {
       first = false;
     }
     // no tags
-    if (first) printf("run=na");
+    if (first) {
+      printf("run=na");
+    }
     printf(",wall_ms=%ld,user_ms=%ld,sys_ms=%ld,vmhwm_kb=%ld,exit=%d", wall_ms,
            user_ms, sys_ms, vmhwm_kb, exit_code);
     // Add simpleperf metrics
