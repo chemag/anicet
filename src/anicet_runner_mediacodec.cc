@@ -19,8 +19,12 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
   }
 
 #ifdef __ANDROID__
+  // Initialize per-frame CPU profiling vector
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
+
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(mediacodec_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup - setup ONCE for all frames
   MediaCodecFormat format;
@@ -37,7 +41,7 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
   AMediaCodec* codec = nullptr;
   int setup_result = android_mediacodec_encode_setup(&format, &codec);
   if (setup_result != 0) {
-    PROFILE_RESOURCES_END(mediacodec_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return setup_result;
   }
 
@@ -46,13 +50,29 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
 
   // (c) Actual encoding - encode all frames in one call with new API
   int result = 0;
-  PROFILE_RESOURCES_START(mediacodec_encode_cpu);
+  PROFILE_RESOURCES_START(profile_encode_cpu);
+
+  // Capture resources before encoding
+  ResourceSnapshot encode_start;
+  capture_resources(&encode_start);
 
   // Call new API - encodes all num_runs frames in single session
   result = android_mediacodec_encode_frame(
       codec, input->input_buffer, input->input_size, &format, num_runs, output);
 
+  // Capture resources after encoding
+  ResourceSnapshot encode_end;
+  capture_resources(&encode_end);
+  ResourceDelta encode_delta;
+  compute_delta(&encode_start, &encode_end, &encode_delta);
+
   if (result == 0) {
+    // Store CPU time for each frame (average since all frames encoded together)
+    double cpu_per_frame_ms = encode_delta.cpu_time_ms / num_runs;
+    for (int i = 0; i < num_runs; i++) {
+      output->profile_encode_cpu_ms[i] = cpu_per_frame_ms;
+    }
+
     // Optionally print timing information
     for (size_t i = 0; i < output->num_frames(); i++) {
       // Optionally print timing information
@@ -69,12 +89,16 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
 
   // Vectors will be automatically freed when output goes out of scope
 
-  PROFILE_RESOURCES_END(mediacodec_encode_cpu);
+  PROFILE_RESOURCES_END(profile_encode_cpu);
 
   // (d) Codec cleanup - cleanup ONCE at the end
   android_mediacodec_encode_cleanup(codec, format.debug_level);
 
-  PROFILE_RESOURCES_END(mediacodec_total_memory);
+  // Capture memory profiling data and store in output
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 #else
   fprintf(stderr, "MediaCodec: Not available (Android only)\n");

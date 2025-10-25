@@ -26,9 +26,11 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(jpegli_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup
   struct jpeg_compress_struct cinfo;
@@ -85,10 +87,12 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
   unsigned long jpeg_size = 0;
   int result = 0;
 
-  PROFILE_RESOURCES_START(jpegli_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+
+    ResourceSnapshot frame_start;
+    capture_resources(&frame_start);
 
     // Free previous run's buffer if exists
     if (jpeg_buf) {
@@ -109,6 +113,12 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
+    ResourceSnapshot frame_end;
+    capture_resources(&frame_end);
+    ResourceDelta frame_delta;
+    compute_delta(&frame_start, &frame_end, &frame_delta);
+    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
+
     // Store output in vector (only copy buffer if dump_output is true)
     if (output->dump_output) {
       output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
@@ -120,7 +130,6 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
       jpeg_abort_compress(&cinfo);
     }
   }
-  PROFILE_RESOURCES_END(jpegli_encode_cpu);
 
   // Cleanup the last jpeg_buf
   if (jpeg_buf) {
@@ -130,6 +139,10 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
   // (d) Codec cleanup
   jpeg_destroy_compress(&cinfo);
 
-  PROFILE_RESOURCES_END(jpegli_total_memory);
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }

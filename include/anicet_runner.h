@@ -44,6 +44,11 @@ struct CodecOutput {
   std::vector<CodecFrameTiming> timings;  // Timing data (one per frame)
   bool dump_output;  // Whether to copy encoded data to frame_buffers
 
+  // Resource consumption statistics
+  std::vector<double>
+      profile_encode_cpu_ms;   // CPU time per frame (milliseconds)
+  long profile_encode_mem_kb;  // Peak memory usage (kilobytes)
+
   // Helper method to get number of frames
   size_t num_frames() const { return frame_buffers.size(); }
 };

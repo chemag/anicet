@@ -27,15 +27,17 @@ int anicet_run_webp(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(webp_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup
   WebPConfig config;
   if (!WebPConfigInit(&config)) {
     fprintf(stderr, "WebP: Failed to initialize config\n");
-    PROFILE_RESOURCES_END(webp_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -46,7 +48,7 @@ int anicet_run_webp(const CodecInput* input, int num_runs,
   WebPPicture picture;
   if (!WebPPictureInit(&picture)) {
     fprintf(stderr, "WebP: Failed to initialize picture\n");
-    PROFILE_RESOURCES_END(webp_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -60,7 +62,7 @@ int anicet_run_webp(const CodecInput* input, int num_runs,
   if (!WebPPictureAlloc(&picture)) {
     fprintf(stderr, "WebP: Failed to allocate picture\n");
     WebPPictureFree(&picture);
-    PROFILE_RESOURCES_END(webp_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -89,10 +91,11 @@ int anicet_run_webp(const CodecInput* input, int num_runs,
 
   // (c) Actual encoding - run num_runs times
   int result = 0;
-  PROFILE_RESOURCES_START(webp_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
-    // Capture start timestamp
+    // Capture start timestamp and resources
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_start;
+    capture_resources(&frame_start);
 
     WebPMemoryWriter writer;
     WebPMemoryWriterInit(&writer);
@@ -106,8 +109,13 @@ int anicet_run_webp(const CodecInput* input, int num_runs,
       break;
     }
 
-    // Capture end timestamp
+    // Capture end timestamp and resources
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_end;
+    capture_resources(&frame_end);
+    ResourceDelta frame_delta;
+    compute_delta(&frame_start, &frame_end, &frame_delta);
+    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
 
     // Store output in vector (only copy buffer if dump_output is true)
     if (output->dump_output) {
@@ -117,11 +125,15 @@ int anicet_run_webp(const CodecInput* input, int num_runs,
 
     WebPMemoryWriterClear(&writer);
   }
-  PROFILE_RESOURCES_END(webp_encode_cpu);
 
   // (d) Codec cleanup
   WebPPictureFree(&picture);
-  PROFILE_RESOURCES_END(webp_total_memory);
+
+  // Capture memory profiling data and store in output
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }
 
@@ -141,15 +153,17 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(webp_nonopt_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup - Load libwebp-nonopt.so with RTLD_LOCAL to isolate symbols
   void* handle = dlopen("libwebp-nonopt.so", RTLD_NOW | RTLD_LOCAL);
   if (!handle) {
     fprintf(stderr, "webp-nonopt: Failed to load library: %s\n", dlerror());
-    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -183,7 +197,7 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
       !encode) {
     fprintf(stderr, "webp-nonopt: Failed to load symbols: %s\n", dlerror());
     dlclose(handle);
-    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -194,7 +208,7 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
                           WEBP_ENCODER_ABI_VERSION)) {
     fprintf(stderr, "webp-nonopt: Failed to initialize config\n");
     dlclose(handle);
-    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -207,7 +221,7 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
   if (!pictureInitInternal(&picture, WEBP_ENCODER_ABI_VERSION)) {
     fprintf(stderr, "webp-nonopt: Failed to initialize picture\n");
     dlclose(handle);
-    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -222,7 +236,7 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
     fprintf(stderr, "webp-nonopt: Failed to allocate picture\n");
     pictureFree(&picture);
     dlclose(handle);
-    PROFILE_RESOURCES_END(webp_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -251,10 +265,11 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
 
   // (c) Actual encoding - run num_runs times
   int result = 0;
-  PROFILE_RESOURCES_START(webp_nonopt_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
-    // Capture start timestamp
+    // Capture start timestamp and resources
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_start;
+    capture_resources(&frame_start);
 
     WebPMemoryWriter writer;
     memoryWriterInit(&writer);
@@ -268,8 +283,13 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
       break;
     }
 
-    // Capture end timestamp
+    // Capture end timestamp and resources
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_end;
+    capture_resources(&frame_end);
+    ResourceDelta frame_delta;
+    compute_delta(&frame_start, &frame_end, &frame_delta);
+    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
 
     // Store output in vector (only copy buffer if dump_output is true)
     if (output->dump_output) {
@@ -279,11 +299,15 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
 
     memoryWriterClear(&writer);
   }
-  PROFILE_RESOURCES_END(webp_nonopt_encode_cpu);
 
   // (d) Codec cleanup
   pictureFree(&picture);
   dlclose(handle);
-  PROFILE_RESOURCES_END(webp_nonopt_total_memory);
+
+  // Capture memory profiling data and store in output
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }

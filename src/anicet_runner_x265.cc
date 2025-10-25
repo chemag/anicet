@@ -27,15 +27,17 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(x265_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup - setup ONCE for all frames
   x265_param* param = x265_param_alloc();
   if (!param) {
     fprintf(stderr, "x265: Failed to allocate parameters\n");
-    PROFILE_RESOURCES_END(x265_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -55,7 +57,7 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
   if (!encoder) {
     fprintf(stderr, "x265: Failed to open encoder\n");
     x265_param_free(param);
-    PROFILE_RESOURCES_END(x265_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -76,11 +78,12 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
 
   // (c) Actual encoding - run num_runs times through same encoder
   int result = 0;
-  PROFILE_RESOURCES_START(x265_encode_cpu);
 
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_start;
+    capture_resources(&frame_start);
 
     // Force this frame to be IDR
     pic_in->sliceType = X265_TYPE_IDR;
@@ -98,6 +101,11 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
 
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_end;
+    capture_resources(&frame_end);
+    ResourceDelta frame_delta;
+    compute_delta(&frame_start, &frame_end, &frame_delta);
+    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
 
     // Calculate total size for this frame
     size_t total_size = 0;
@@ -119,14 +127,16 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
     output->frame_sizes[run] = total_size;
   }
 
-  PROFILE_RESOURCES_END(x265_encode_cpu);
-
   // (d) Codec cleanup - cleanup ONCE at the end
   x265_picture_free(pic_in);
   x265_encoder_close(encoder);
   x265_param_free(param);
 
-  PROFILE_RESOURCES_END(x265_total_memory);
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }
 
@@ -146,9 +156,11 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(x265_8bit_nonopt_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup - Load libx265-8bit-nonopt.so with RTLD_LOCAL to isolate
   // symbols
@@ -156,7 +168,7 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
   if (!handle) {
     fprintf(stderr, "x265-8bit-nonopt: Failed to load library: %s\n",
             dlerror());
-    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -193,7 +205,7 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
     fprintf(stderr, "x265-8bit-nonopt: Failed to load symbols: %s\n",
             dlerror());
     dlclose(handle);
-    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -202,7 +214,7 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
   if (!param) {
     fprintf(stderr, "x265-8bit-nonopt: Failed to allocate parameters\n");
     dlclose(handle);
-    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -223,7 +235,7 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
     fprintf(stderr, "x265-8bit-nonopt: Failed to open encoder\n");
     param_free(param);
     dlclose(handle);
-    PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -244,11 +256,12 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
 
   // (c) Actual encoding - run num_runs times through same encoder
   int result = 0;
-  PROFILE_RESOURCES_START(x265_8bit_nonopt_encode_cpu);
 
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_start;
+    capture_resources(&frame_start);
 
     // Force this frame to be IDR
     pic_in->sliceType = X265_TYPE_IDR;
@@ -265,6 +278,11 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
 
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_end;
+    capture_resources(&frame_end);
+    ResourceDelta frame_delta;
+    compute_delta(&frame_start, &frame_end, &frame_delta);
+    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
 
     // Calculate total size for this frame
     size_t total_size = 0;
@@ -286,13 +304,16 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
     output->frame_sizes[run] = total_size;
   }
 
-  PROFILE_RESOURCES_END(x265_8bit_nonopt_encode_cpu);
-
   // (d) Codec cleanup - cleanup ONCE at the end
   picture_free(pic_in);
   encoder_close(encoder);
   param_free(param);
   dlclose(handle);
-  PROFILE_RESOURCES_END(x265_8bit_nonopt_total_memory);
+
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }

@@ -27,15 +27,17 @@ int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(libjpegturbo_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup
   tjhandle handle = tjInitCompress();
   if (!handle) {
     fprintf(stderr, "TurboJPEG: Failed to initialize compressor\n");
-    PROFILE_RESOURCES_END(libjpegturbo_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -43,10 +45,11 @@ int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
 
   // (c) Actual encoding - run num_runs times
   int result = 0;
-  PROFILE_RESOURCES_START(libjpegturbo_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_start;
+    capture_resources(&frame_start);
 
     unsigned char* jpeg_buf = nullptr;
     unsigned long jpeg_size = 0;
@@ -64,6 +67,11 @@ int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
 
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_end;
+    capture_resources(&frame_end);
+    ResourceDelta frame_delta;
+    compute_delta(&frame_start, &frame_end, &frame_delta);
+    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
 
     // Store output in vector (only copy buffer if dump_output is true)
     if (output->dump_output) {
@@ -73,11 +81,15 @@ int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
 
     tjFree(jpeg_buf);
   }
-  PROFILE_RESOURCES_END(libjpegturbo_encode_cpu);
 
   // (d) Codec cleanup
   tjDestroy(handle);
-  PROFILE_RESOURCES_END(libjpegturbo_total_memory);
+
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }
 
@@ -98,9 +110,11 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(libjpegturbo_nonopt_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup - Load libturbojpeg-nonopt.so with RTLD_LOCAL to isolate
   // symbols
@@ -108,7 +122,7 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
   if (!handle) {
     fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load library: %s\n",
             dlerror());
-    PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -133,7 +147,7 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
     fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load symbols: %s\n",
             dlerror());
     dlclose(handle);
-    PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -142,7 +156,7 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
   if (!tj_handle) {
     fprintf(stderr, "libjpeg-turbo-nonopt: Failed to initialize compressor\n");
     dlclose(handle);
-    PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -150,10 +164,11 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
 
   // (c) Actual encoding - run num_runs times
   int result = 0;
-  PROFILE_RESOURCES_START(libjpegturbo_nonopt_encode_cpu);
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_start;
+    capture_resources(&frame_start);
 
     unsigned char* jpeg_buf = nullptr;
     unsigned long jpeg_size = 0;
@@ -171,6 +186,11 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
 
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
+    ResourceSnapshot frame_end;
+    capture_resources(&frame_end);
+    ResourceDelta frame_delta;
+    compute_delta(&frame_start, &frame_end, &frame_delta);
+    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
 
     // Store output in vector (only copy buffer if dump_output is true)
     if (output->dump_output) {
@@ -180,11 +200,15 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
 
     tjFreeFunc(jpeg_buf);
   }
-  PROFILE_RESOURCES_END(libjpegturbo_nonopt_encode_cpu);
 
   // (d) Codec cleanup
   tjDestroyFunc(tj_handle);
   dlclose(handle);
-  PROFILE_RESOURCES_END(libjpegturbo_nonopt_total_memory);
+
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }

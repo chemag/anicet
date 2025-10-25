@@ -31,9 +31,11 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
   output->frame_sizes.resize(num_runs);
   output->timings.clear();
   output->timings.resize(num_runs);
+  output->profile_encode_cpu_ms.clear();
+  output->profile_encode_cpu_ms.resize(num_runs);
 
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(svt_av1_total_memory);
+  PROFILE_RESOURCES_START(profile_encode_mem);
 
   // (a) Codec setup
   EbComponentType* handle = nullptr;
@@ -43,7 +45,7 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
   EbErrorType res = svt_av1_enc_init_handle(&handle, &config);
   if (res != EB_ErrorNone || !handle) {
     fprintf(stderr, "SVT-AV1: Failed to initialize encoder handle\n");
-    PROFILE_RESOURCES_END(svt_av1_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -62,7 +64,7 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
   if (res != EB_ErrorNone) {
     fprintf(stderr, "SVT-AV1: Failed to set parameters\n");
     svt_av1_enc_deinit_handle(handle);
-    PROFILE_RESOURCES_END(svt_av1_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -70,7 +72,7 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
   if (res != EB_ErrorNone) {
     fprintf(stderr, "SVT-AV1: Failed to initialize encoder\n");
     svt_av1_enc_deinit_handle(handle);
-    PROFILE_RESOURCES_END(svt_av1_total_memory);
+    PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
@@ -102,12 +104,15 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
   // (c) Actual encoding - run num_runs times
   int result = 0;
 
-  PROFILE_RESOURCES_START(svt_av1_encode_cpu);
+  // Store frame start snapshots for per-frame CPU tracking
+  std::vector<ResourceSnapshot> frame_starts(num_runs);
 
   // Step 1: Send all input pictures (I-frame only, no EOS between them)
   for (int run = 0; run < num_runs; run++) {
     // Capture start timestamp when sending input
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
+
+    capture_resources(&frame_starts[run]);
 
     res = svt_av1_enc_send_picture(handle, &input_buf);
     if (res != EB_ErrorNone) {
@@ -139,6 +144,12 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
         // Capture end timestamp when receiving output
         output->timings[run].output_timestamp_us = anicet_get_timestamp();
 
+        ResourceSnapshot frame_end;
+        capture_resources(&frame_end);
+        ResourceDelta frame_delta;
+        compute_delta(&frame_starts[run], &frame_end, &frame_delta);
+        output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
+
         // Store output in vector (only copy buffer if dump_output is true)
         if (output->dump_output) {
           output->frame_buffers[run].assign(
@@ -156,12 +167,14 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
     }
   }
 
-  PROFILE_RESOURCES_END(svt_av1_encode_cpu);
-
   // (d) Codec cleanup
   svt_av1_enc_deinit(handle);
   svt_av1_enc_deinit_handle(handle);
 
-  PROFILE_RESOURCES_END(svt_av1_total_memory);
+  ResourceSnapshot __profile_mem_end;
+  capture_resources(&__profile_mem_end);
+  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
+
+  PROFILE_RESOURCES_END(profile_encode_mem);
   return result;
 }
