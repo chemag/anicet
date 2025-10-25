@@ -34,7 +34,17 @@ if(ANDROID)
 endif()
 
 # Define the anicet executable (always built)
-add_executable(anicet anicet.cpp anicet_runner.cc anicet_common.cc)
+add_executable(anicet
+    anicet.cpp
+    anicet_runner.cc
+    anicet_runner_webp.cc
+    anicet_runner_libjpegturbo.cc
+    anicet_runner_jpegli.cc
+    anicet_runner_x265.cc
+    anicet_runner_svtav1.cc
+    anicet_runner_mediacodec.cc
+    anicet_common.cc
+)
 
 # Set C++ standard
 set_target_properties(anicet PROPERTIES
