@@ -52,6 +52,8 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
   // I-frame only
   param->keyframeMax = 1;
   param->bframes = 0;
+  // Set log level based on debug_level (only show messages if debug_level > 1)
+  param->logLevel = (input->debug_level > 1) ? X265_LOG_INFO : X265_LOG_NONE;
 
   x265_encoder* encoder = x265_encoder_open(param);
   if (!encoder) {
@@ -233,6 +235,8 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
   // I-frame only
   param->keyframeMax = 1;
   param->bframes = 0;
+  // Set log level based on debug_level (only show messages if debug_level > 1)
+  param->logLevel = (input->debug_level > 1) ? X265_LOG_INFO : X265_LOG_NONE;
 
   x265_encoder* encoder = encoder_open(param);
   if (!encoder) {

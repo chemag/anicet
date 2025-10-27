@@ -282,7 +282,7 @@ static int encode_frames(const Options& opt) {
   g_debug_level = opt.debug_level;
 
   // 1. Read input file into buffer
-  DEBUG(1, "Opening input file: %s", opt.input_file.c_str());
+  DEBUG(2, "Opening input file: %s", opt.input_file.c_str());
   int input_fd = open(opt.input_file.c_str(), O_RDONLY);
   if (input_fd < 0) {
     fprintf(stderr, "Error: Cannot open input file: %s\n",
@@ -312,7 +312,7 @@ static int encode_frames(const Options& opt) {
     return 1;
   }
 
-  DEBUG(1, "Reading %zu bytes from input file...", read_size);
+  DEBUG(2, "Reading %zu bytes from input file...", read_size);
   uint8_t* input_buffer = (uint8_t*)malloc(read_size);
   if (!input_buffer) {
     fprintf(stderr, "Error: Cannot allocate input buffer\n");
@@ -331,10 +331,10 @@ static int encode_frames(const Options& opt) {
     free(input_buffer);
     return 1;
   }
-  DEBUG(1, "Input file read successfully (%zu bytes)", read_size);
+  DEBUG(2, "Input file read successfully (%zu bytes)", read_size);
 
   // 2. Call library function to encode
-  DEBUG(1, "Calling android_mediacodec_encode_frame_full()...");
+  DEBUG(2, "Calling android_mediacodec_encode_frame_full()...");
 
   // Prepare format configuration
   MediaCodecFormat format;
@@ -373,11 +373,11 @@ static int encode_frames(const Options& opt) {
     return 1;
   }
 
-  DEBUG(1, "Encoding completed successfully, output size: %zu bytes",
+  DEBUG(2, "Encoding completed successfully, output size: %zu bytes",
         output_size);
 
   // 3. Write output to file
-  DEBUG(1, "Writing output to: %s", opt.output_file.c_str());
+  DEBUG(2, "Writing output to: %s", opt.output_file.c_str());
   FILE* output_fp = fopen(opt.output_file.c_str(), "wb");
   if (!output_fp) {
     fprintf(stderr, "Error: Cannot create output file: %s\n",
@@ -395,7 +395,7 @@ static int encode_frames(const Options& opt) {
     return 1;
   }
 
-  DEBUG(1, "Output file written successfully (%zu bytes)", bytes_written);
+  DEBUG(2, "Output file written successfully (%zu bytes)", bytes_written);
 
   // 4. Clean up
   free(output_buffer);

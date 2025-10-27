@@ -3,6 +3,9 @@
 
 #include "anicet_runner_svtav1.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <cstdio>
 #include <cstring>
 
@@ -41,9 +44,26 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
   EbComponentType* handle = nullptr;
   EbSvtAv1EncConfiguration config;
 
+  // Suppress SVT-AV1 logging by redirecting stderr if debug_level <= 1
+  int stderr_backup = -1;
+  int devnull_fd = -1;
+  if (input->debug_level <= 1) {
+    stderr_backup = dup(STDERR_FILENO);
+    devnull_fd = open("/dev/null", O_WRONLY);
+    if (devnull_fd >= 0) {
+      dup2(devnull_fd, STDERR_FILENO);
+    }
+  }
+
   // Initialize encoder handle - this loads default config
   EbErrorType res = svt_av1_enc_init_handle(&handle, &config);
   if (res != EB_ErrorNone || !handle) {
+    // Restore stderr before printing error
+    if (stderr_backup >= 0) {
+      dup2(stderr_backup, STDERR_FILENO);
+      close(stderr_backup);
+      if (devnull_fd >= 0) close(devnull_fd);
+    }
     fprintf(stderr, "SVT-AV1: Failed to initialize encoder handle\n");
     PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
@@ -62,6 +82,12 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
 
   res = svt_av1_enc_set_parameter(handle, &config);
   if (res != EB_ErrorNone) {
+    // Restore stderr before printing error
+    if (stderr_backup >= 0) {
+      dup2(stderr_backup, STDERR_FILENO);
+      close(stderr_backup);
+      if (devnull_fd >= 0) close(devnull_fd);
+    }
     fprintf(stderr, "SVT-AV1: Failed to set parameters\n");
     svt_av1_enc_deinit_handle(handle);
     PROFILE_RESOURCES_END(profile_encode_mem);
@@ -70,6 +96,12 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
 
   res = svt_av1_enc_init(handle);
   if (res != EB_ErrorNone) {
+    // Restore stderr before printing error
+    if (stderr_backup >= 0) {
+      dup2(stderr_backup, STDERR_FILENO);
+      close(stderr_backup);
+      if (devnull_fd >= 0) close(devnull_fd);
+    }
     fprintf(stderr, "SVT-AV1: Failed to initialize encoder\n");
     svt_av1_enc_deinit_handle(handle);
     PROFILE_RESOURCES_END(profile_encode_mem);
@@ -116,6 +148,13 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
 
     res = svt_av1_enc_send_picture(handle, &input_buf);
     if (res != EB_ErrorNone) {
+      // Restore stderr before printing error
+      if (stderr_backup >= 0) {
+        dup2(stderr_backup, STDERR_FILENO);
+        close(stderr_backup);
+        if (devnull_fd >= 0) close(devnull_fd);
+        stderr_backup = -1;  // Mark as restored
+      }
       fprintf(stderr, "SVT-AV1: Failed to send picture (run %d)\n", run);
       result = -1;
       break;
@@ -130,6 +169,13 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
     eos_buffer.flags = EB_BUFFERFLAG_EOS;
     res = svt_av1_enc_send_picture(handle, &eos_buffer);
     if (res != EB_ErrorNone) {
+      // Restore stderr before printing error
+      if (stderr_backup >= 0) {
+        dup2(stderr_backup, STDERR_FILENO);
+        close(stderr_backup);
+        if (devnull_fd >= 0) close(devnull_fd);
+        stderr_backup = -1;  // Mark as restored
+      }
       fprintf(stderr, "SVT-AV1: Failed to send EOS\n");
       result = -1;
     }
@@ -160,6 +206,13 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
 
         svt_av1_enc_release_out_buffer(&output_buf);
       } else {
+        // Restore stderr before printing error
+        if (stderr_backup >= 0) {
+          dup2(stderr_backup, STDERR_FILENO);
+          close(stderr_backup);
+          if (devnull_fd >= 0) close(devnull_fd);
+          stderr_backup = -1;  // Mark as restored
+        }
         fprintf(stderr, "SVT-AV1: Failed to get output packet (run %d)\n", run);
         result = -1;
         break;
@@ -170,6 +223,13 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
   // (d) Codec cleanup
   svt_av1_enc_deinit(handle);
   svt_av1_enc_deinit_handle(handle);
+
+  // Restore stderr if it was redirected
+  if (stderr_backup >= 0) {
+    dup2(stderr_backup, STDERR_FILENO);
+    close(stderr_backup);
+    if (devnull_fd >= 0) close(devnull_fd);
+  }
 
   ResourceSnapshot __profile_mem_end;
   capture_resources(&__profile_mem_end);

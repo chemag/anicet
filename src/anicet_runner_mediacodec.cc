@@ -52,7 +52,7 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
   if (result == 0) {
     // Optionally print timing information
     for (size_t i = 0; i < output->num_frames(); i++) {
-      if (format.debug_level > 0) {
+      if (format.debug_level > 1) {
         int64_t encode_time_us = output->timings[i].output_timestamp_us -
                                  output->timings[i].input_timestamp_us;
         printf("Frame %zu: encode time = %lld us\n", i,

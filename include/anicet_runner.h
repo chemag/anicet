@@ -41,6 +41,8 @@ struct CodecInput {
   int width;
   // Color format string (e.g., "yuv420p")
   const char* color_format;
+  // Debug level (0 = silent, higher = more verbose)
+  int debug_level;
 };
 
 // Codec encoding output with timing data (C++ only)
@@ -52,6 +54,8 @@ struct CodecOutput {
   std::vector<size_t> frame_sizes;
   // Timing data (one per frame)
   std::vector<CodecFrameTiming> timings;
+  // Output filenames (one per frame) - populated if dump_output is true
+  std::vector<std::string> output_files;
   // Whether to copy encoded data to frame_buffers
   bool dump_output;
 

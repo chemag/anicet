@@ -152,27 +152,27 @@ void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
   int32_t color_fmt = get_color_format(color_format_str);
   // Set basic parameters
   AMediaFormat_setString(format, "mime", mime_type);
-  DEBUG(2, "AMediaFormat_setString(format, \"mime\", \"%s\");", mime_type);
+  DEBUG(3, "AMediaFormat_setString(format, \"mime\", \"%s\");", mime_type);
 
   AMediaFormat_setInt32(format, "width", width);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"width\", %d);", width);
+  DEBUG(3, "AMediaFormat_setInt32(format, \"width\", %d);", width);
 
   AMediaFormat_setInt32(format, "height", height);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"height\", %d);", height);
+  DEBUG(3, "AMediaFormat_setInt32(format, \"height\", %d);", height);
 
-  DEBUG(1, "Setting color-format to %d (%s)", color_fmt, color_format);
+  DEBUG(2, "Setting color-format to %d (%s)", color_fmt, color_format);
   AMediaFormat_setInt32(format, "color-format", color_fmt);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"color-format\", %d);", color_fmt);
+  DEBUG(3, "AMediaFormat_setInt32(format, \"color-format\", %d);", color_fmt);
 
   // TODO(chema): reconsider this
   int frame_rate = 30;
   AMediaFormat_setInt32(format, "frame-rate", frame_rate);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"frame-rate\", %d);", frame_rate);
+  DEBUG(3, "AMediaFormat_setInt32(format, \"frame-rate\", %d);", frame_rate);
 
   // set the key frame interval (GoP) to all-key frames
   int i_frame_interval = 0;
   AMediaFormat_setInt32(format, "i-frame-interval", i_frame_interval);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"i-frame-interval\", %d);",
+  DEBUG(3, "AMediaFormat_setInt32(format, \"i-frame-interval\", %d);",
         i_frame_interval);
 
   // Set bitrate
@@ -181,17 +181,17 @@ void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
                                  width, height);
   }
   AMediaFormat_setInt32(format, "bitrate", *bitrate);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"bitrate\", %d);", *bitrate);
+  DEBUG(3, "AMediaFormat_setInt32(format, \"bitrate\", %d);", *bitrate);
 
   // set bitrate mode (0=CQ, 1=VBR, 2=CBR)
   int bitrate_mode = 1;
   AMediaFormat_setInt32(format, "bitrate-mode", bitrate_mode);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"bitrate-mode\", %i);",
+  DEBUG(3, "AMediaFormat_setInt32(format, \"bitrate-mode\", %i);",
         bitrate_mode);
 
   int max_b_frames = 0;
   AMediaFormat_setInt32(format, "max-bframes", max_b_frames);
-  DEBUG(2, "AMediaFormat_setInt32(format, \"max-bframes\", %d);", max_b_frames);
+  DEBUG(3, "AMediaFormat_setInt32(format, \"max-bframes\", %d);", max_b_frames);
 }
 
 #ifdef __ANDROID__
@@ -211,7 +211,7 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
     fprintf(stderr, "Warning: Failed to initialize Binder thread pool\n");
     fprintf(stderr, "MediaCodec may not work correctly\n");
   } else {
-    DEBUG(1, "Binder thread pool initialized successfully");
+    DEBUG(2, "Binder thread pool initialized successfully");
     // Give the media server time to stabilize after binder connection
     // This helps prevent aborts when the media server is still cleaning up from
     // previous client disconnections. Testing shows: 18% at 20ms, 16% at 50ms,
@@ -247,9 +247,9 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
   android_mediacodec_set_format(format, mime_type, fmt->width, fmt->height,
                                 fmt->color_format, &bitrate_local,
                                 fmt->quality);
-  DEBUG(1, "Encoding with: %s", fmt->codec_name);
-  DEBUG(1, "MIME type: %s", mime_type);
-  DEBUG(1, "resolution: %dx%d bitrate: %d", fmt->width, fmt->height,
+  DEBUG(2, "Encoding with: %s", fmt->codec_name);
+  DEBUG(2, "MIME type: %s", mime_type);
+  DEBUG(2, "resolution: %dx%d bitrate: %d", fmt->width, fmt->height,
         bitrate_local);
 
   // 2. create codec
@@ -260,12 +260,12 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
   const int max_retries = 3;
   for (int attempt = 0; attempt < max_retries && !codec; attempt++) {
     if (attempt > 0) {
-      DEBUG(1, "Retry %d/%d: Waiting 50ms before retrying codec creation...",
+      DEBUG(2, "Retry %d/%d: Waiting 50ms before retrying codec creation...",
             attempt, max_retries - 1);
       // 50ms delay before retry
       usleep(50000);
     }
-    DEBUG(1,
+    DEBUG(2,
           "Creating codec: AMediaCodec_createCodecByName(%s) (attempt %d/%d)",
           fmt->codec_name, attempt + 1, max_retries);
     codec = AMediaCodec_createCodecByName(fmt->codec_name);
@@ -277,11 +277,11 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
     AMediaFormat_delete(format);
     return 1;
   }
-  DEBUG(1, "Codec created successfully");
+  DEBUG(2, "Codec created successfully");
 
   // 3. configure codec
-  DEBUG(1, "Configuring codec...");
-  DEBUG(2,
+  DEBUG(2, "Configuring codec...");
+  DEBUG(3,
         "AMediaCodec_configure(codec, format, nullptr, nullptr, "
         "AMEDIACODEC_CONFIGURE_FLAG_ENCODE);");
   media_status_t status = AMediaCodec_configure(
@@ -293,18 +293,18 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
     AMediaCodec_delete(codec);
     return 2;
   }
-  DEBUG(1, "Codec configured successfully");
+  DEBUG(2, "Codec configured successfully");
 
   // 4. start codec
-  DEBUG(1, "Starting codec...");
-  DEBUG(2, "AMediaCodec_start(codec);");
+  DEBUG(2, "Starting codec...");
+  DEBUG(3, "AMediaCodec_start(codec);");
   status = AMediaCodec_start(codec);
   if (status != AMEDIA_OK) {
     fprintf(stderr, "Error: Cannot start codec: %d\n", status);
     AMediaCodec_delete(codec);
     return 3;
   }
-  DEBUG(1, "Codec started successfully");
+  DEBUG(2, "Codec started successfully");
 
   *codec_out = codec;
   return 0;
@@ -366,12 +366,12 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
           AMediaCodec_dequeueInputBuffer(codec, timeout_us);
 
       if (input_buffer_index == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
-        DEBUG(2,
+        DEBUG(3,
               "AMediaCodec_dequeueInputBuffer() -> "
               "AMEDIACODEC_INFO_TRY_AGAIN_LATER");
 
       } else if (input_buffer_index >= 0) {
-        DEBUG(1,
+        DEBUG(2,
               "AMediaCodec_dequeueInputBuffer(codec, timeout_us: %zu) -> "
               "input_buffer_index: %zu",
               timeout_us, input_buffer_index);
@@ -379,7 +379,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
         size_t input_buffer_size;
         uint8_t* codec_input_buffer = AMediaCodec_getInputBuffer(
             codec, (size_t)input_buffer_index, &input_buffer_size);
-        DEBUG(1,
+        DEBUG(2,
               "AMediaCodec_getInputBuffer(codec, input_buffer_index: %zu, "
               "&input_buffer_size: %zu) -> input_buffer: %p",
               input_buffer_index, input_buffer_size, codec_input_buffer);
@@ -395,14 +395,14 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 
           AMediaCodec_queueInputBuffer(codec, (size_t)input_buffer_index, 0,
                                        frame_size, pts_timestamp_us, 0);
-          DEBUG(1,
+          DEBUG(2,
                 "AMediaCodec_queueInputBuffer(codec, input_buffer_index: %zu, "
                 "0, frame_size: %zu, pts_timestamp_us: %zu, flags: 0)",
                 input_buffer_index, frame_size, pts_timestamp_us);
           frames_sent++;
         } else {
           // Send EOS
-          DEBUG(1,
+          DEBUG(2,
                 "AMediaCodec_queueInputBuffer(codec, input_buffer_index: %zu, "
                 "0, frame_size: 0, pts_timestamp_us: 0, flags: "
                 "AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM)",
@@ -420,26 +420,26 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
         AMediaCodec_dequeueOutputBuffer(codec, &info, timeout_us);
 
     if (output_buffer_index == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
-      DEBUG(2,
+      DEBUG(3,
             "AMediaCodec_dequeueOutputBuffer() -> "
             "AMEDIACODEC_INFO_TRY_AGAIN_LATER");
 
     } else if (output_buffer_index == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
-      DEBUG(2,
+      DEBUG(3,
             "AMediaCodec_dequeueOutputBuffer() -> "
             "AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED");
       AMediaFormat* ofmt = AMediaCodec_getOutputFormat(codec);
-      DEBUG(1, "Output format changed: %s", AMediaFormat_toString(ofmt));
+      DEBUG(2, "Output format changed: %s", AMediaFormat_toString(ofmt));
       AMediaFormat_delete(ofmt);
 
     } else if (output_buffer_index == AMEDIACODEC_INFO_OUTPUT_BUFFERS_CHANGED) {
-      DEBUG(2,
+      DEBUG(3,
             "AMediaCodec_dequeueOutputBuffer() -> "
             "AMEDIACODEC_INFO_OUTPUT_BUFFERS_CHANGED");
 
     } else if (output_buffer_index >= 0) {
       DEBUG(
-          1,
+          2,
           "AMediaCodec_dequeueOutputBuffer(codec, &info {.offset: 0x%x .size: "
           "%u .presentationTimeUs: %lu .flags: %u}, timeout_us: %zu) -> %zu",
           info.offset, info.size, info.presentationTimeUs, info.flags,
@@ -448,7 +448,7 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
       size_t codec_output_buffer_size;
       uint8_t* codec_output_buffer = AMediaCodec_getOutputBuffer(
           codec, (size_t)output_buffer_index, &codec_output_buffer_size);
-      DEBUG(1,
+      DEBUG(2,
             "AMediaCodec_getOutputBuffer(codec, output_buffer_index: %zi, "
             "&output_buffer_size: %zu)",
             output_buffer_index, codec_output_buffer_size);
@@ -460,9 +460,9 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
         const bool is_config =
             (info.flags & AMEDIACODEC_BUFFER_FLAG_CODEC_CONFIG) != 0;
         if (is_config) {
-          DEBUG(1, "... this is a config frame");
+          DEBUG(2, "... this is a config frame");
         } else {
-          DEBUG(1, "... this is a buffer frame");
+          DEBUG(2, "... this is a buffer frame");
           current_frame_idx = frames_recv;
           frames_recv++;
 
@@ -491,14 +491,14 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
 
       AMediaCodec_releaseOutputBuffer(codec, (size_t)output_buffer_index,
                                       false);
-      DEBUG(1,
+      DEBUG(2,
             "AMediaCodec_releaseOutputBuffer(codec, output_buffer_index: %zi, "
             "false)",
             output_buffer_index);
     }
   }
 
-  DEBUG(1, "Encoded %d frames, received %d frames", frames_sent, frames_recv);
+  DEBUG(2, "Encoded %d frames, received %d frames", frames_sent, frames_recv);
 
   // Capture resources after encoding
   ResourceSnapshot encode_end;
@@ -544,9 +544,9 @@ void android_mediacodec_encode_cleanup(AMediaCodec* codec, int debug_level) {
   // Stop and delete codec
   // NOTE: Do NOT call flush() here - it's for reset/reuse, not cleanup
   // After EOS is sent/received, go straight to stop then delete
-  DEBUG(2, "Stopping codec...");
+  DEBUG(3, "Stopping codec...");
   AMediaCodec_stop(codec);
-  DEBUG(2, "Deleting codec...");
+  DEBUG(3, "Deleting codec...");
   AMediaCodec_delete(codec);
 
   // NOTE: We do NOT stop the binder thread pool here!

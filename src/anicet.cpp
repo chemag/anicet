@@ -606,8 +606,8 @@ int main(int argc, char** argv) {
         &codec_output
     );
 
-    // Print simple debug output to stdout if debug level > 1
-    if (opt.debug > 1) {
+    // Print simple debug output to stdout if debug level >= 1
+    if (opt.debug >= 1) {
       printf("input: %s\n", opt.image_file.c_str());
       printf("width: %d\n", opt.width);
       printf("height: %d\n", opt.height);
@@ -616,6 +616,9 @@ int main(int argc, char** argv) {
       printf("num_runs: %d\n", opt.num_runs);
       for (size_t i = 0; i < codec_output.num_frames(); i++) {
         printf("index: %zu\n", i);
+        if (opt.dump_output && i < codec_output.output_files.size()) {
+          printf("  file: %s\n", codec_output.output_files[i].c_str());
+        }
         printf("  codec: %s\n", opt.codec.c_str());
         if (i < codec_output.frame_sizes.size()) {
           printf("  size_bytes: %zu\n", codec_output.frame_sizes[i]);
@@ -664,6 +667,9 @@ int main(int argc, char** argv) {
     output_json["output"]["frames"] = json::array();
     for (size_t i = 0; i < codec_output.num_frames(); i++) {
       json output_frame;
+      if (opt.dump_output && i < codec_output.output_files.size()) {
+        output_frame["file"] = codec_output.output_files[i];
+      }
       output_frame["exit_code"] = result;
       if (i < codec_output.frame_sizes.size()) {
         output_frame["size_bytes"] = codec_output.frame_sizes[i];

@@ -60,6 +60,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   input.height = height;
   input.width = width;
   input.color_format = color_format;
+  input.debug_level = debug_level;
 
   int errors = 0;
 
@@ -69,12 +70,17 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_webp(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename), "%s/%s.webp.%02zu.webp",
-                   dump_output_dir, dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(filename, sizeof(filename),
+                 "%s/%s.webp.index_%zu.width_%d.height_%d.color_%s.webp",
+                 dump_output_dir, dump_output_prefix, i, width, height,
+                 color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -100,12 +106,17 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_webp_nonopt(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename), "%s/%s.webp-nonopt.%02zu.webp",
-                   dump_output_dir, dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(filename, sizeof(filename),
+                 "%s/%s.webp-nonopt.index_%zu.width_%d.height_%d.color_%s.webp",
+                 dump_output_dir, dump_output_prefix, i, width, height,
+                 color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -131,12 +142,18 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_libjpegturbo(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename), "%s/%s.libjpegturbo.%02zu.jpeg",
-                   dump_output_dir, dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(
+            filename, sizeof(filename),
+            "%s/%s.libjpegturbo.index_%zu.width_%d.height_%d.color_%s.jpeg",
+            dump_output_dir, dump_output_prefix, i, width, height,
+            color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -162,13 +179,19 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_libjpegturbo_nonopt(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename),
-                   "%s/%s.libjpegturbo-nonopt.%02zu.jpeg", dump_output_dir,
-                   dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(filename, sizeof(filename),
+                 "%s/"
+                 "%s.libjpegturbo-nonopt.index_%"
+                 "zu.width_%d.height_%d.color_%s.jpeg",
+                 dump_output_dir, dump_output_prefix, i, width, height,
+                 color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -194,12 +217,17 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_jpegli(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename), "%s/%s.jpegli.%02zu.jpeg",
-                   dump_output_dir, dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(filename, sizeof(filename),
+                 "%s/%s.jpegli.index_%zu.width_%d.height_%d.color_%s.jpeg",
+                 dump_output_dir, dump_output_prefix, i, width, height,
+                 color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -225,12 +253,17 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_x265_8bit(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename), "%s/%s.x265-8bit.%02zu.265",
-                   dump_output_dir, dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(filename, sizeof(filename),
+                 "%s/%s.x265-8bit.index_%zu.width_%d.height_%d.color_%s.265",
+                 dump_output_dir, dump_output_prefix, i, width, height,
+                 color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -256,13 +289,19 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_x265_8bit_nonopt(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename),
-                   "%s/%s.x265-8bit-nonopt.%02zu.265", dump_output_dir,
-                   dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(
+            filename, sizeof(filename),
+            "%s/"
+            "%s.x265-8bit-nonopt.index_%zu.width_%d.height_%d.color_%s.265",
+            dump_output_dir, dump_output_prefix, i, width, height,
+            color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -288,12 +327,17 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     if (anicet_run_svtav1(&input, num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename), "%s/%s.svtav1.%02zu.av1",
-                   dump_output_dir, dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(filename, sizeof(filename),
+                 "%s/%s.svtav1.index_%zu.width_%d.height_%d.color_%s.av1",
+                 dump_output_dir, dump_output_prefix, i, width, height,
+                 color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
@@ -321,12 +365,17 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     if (anicet_run_mediacodec(&input, "c2.android.hevc.encoder", num_runs,
                               &local_output) == 0 &&
         local_output.num_frames() > 0) {
-      // Write output files if requested
-      if (dump_output) {
-        for (size_t i = 0; i < local_output.num_frames(); i++) {
-          char filename[512];
-          snprintf(filename, sizeof(filename), "%s/%s.mediacodec.%02zu.bin",
-                   dump_output_dir, dump_output_prefix, i);
+      // Generate filenames and optionally write files
+      for (size_t i = 0; i < local_output.num_frames(); i++) {
+        char filename[512];
+        snprintf(filename, sizeof(filename),
+                 "%s/%s.mediacodec.index_%zu.width_%d.height_%d.color_%s.bin",
+                 dump_output_dir, dump_output_prefix, i, width, height,
+                 color_format);
+        local_output.output_files.push_back(filename);
+
+        // Write output file if requested
+        if (dump_output) {
           FILE* f = fopen(filename, "wb");
           if (f) {
             fwrite(local_output.frame_buffers[i].data(), 1,
