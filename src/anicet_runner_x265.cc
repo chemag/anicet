@@ -136,7 +136,10 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
   capture_resources(&__profile_mem_end);
   output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
 
-  PROFILE_RESOURCES_END(profile_encode_mem);
+  // Compute and store resource delta (without printing)
+  compute_delta(&__profile_start_profile_encode_mem, &__profile_mem_end,
+                &output->resource_delta);
+
   return result;
 }
 
@@ -315,6 +318,9 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
   capture_resources(&__profile_mem_end);
   output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
 
-  PROFILE_RESOURCES_END(profile_encode_mem);
+  // Compute and store resource delta (without printing)
+  compute_delta(&__profile_start_profile_encode_mem, &__profile_mem_end,
+                &output->resource_delta);
+
   return result;
 }

@@ -70,7 +70,11 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
   ResourceSnapshot __profile_mem_end;
   capture_resources(&__profile_mem_end);
   output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
-  PROFILE_RESOURCES_END(profile_encode_mem);
+
+  // Compute and store resource delta (without printing)
+  compute_delta(&__profile_start_profile_encode_mem, &__profile_mem_end,
+                &output->resource_delta);
+
   return result;
 #else
   fprintf(stderr, "MediaCodec: Not available (Android only)\n");

@@ -31,6 +31,9 @@
 // Version information
 #include "anicet_version.h"
 
+// JSON library
+#include <nlohmann/json.hpp>
+
 
 // small utilities
 static long now_ms_monotonic() {
@@ -251,6 +254,8 @@ struct Options {
   std::string dump_output_prefix;
   // debug level (0 = no debug, higher = more verbose)
   int debug = DEFAULT_DEBUG_LEVEL;
+  // output file for JSON results (default: stdout)
+  std::string output_file = "-";
 };
 
 static void print_help(const char* argv0) {
@@ -281,6 +286,7 @@ static void print_help(const char* argv0) {
       "  --no-dump-output         Do not write output files to disk\n"
       "  --dump-output-dir DIR    Directory for output files (default: exe directory)\n"
       "  --dump-output-prefix PFX Prefix for output files (default: anicet.output)\n"
+      "  -o, --output FILE        Output file for JSON results (default: stdout, use '-' for stdout)\n"
       "  -d, --debug              Increase debug verbosity (can be repeated: -d -d or -dd)\n"
       "  --quiet                  Disable all debug output (sets debug level to 0)\n"
       "  --version                Show version information\n"
@@ -313,6 +319,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     {"no-dump-output", no_argument, nullptr, 'O'},
     {"dump-output-dir", required_argument, nullptr, 'r'},
     {"dump-output-prefix", required_argument, nullptr, 'p'},
+    {"output", required_argument, nullptr, 'o'},
     {"debug", no_argument, nullptr, 'd'},
     {"quiet", no_argument, nullptr, 'q'},
     {nullptr, 0, nullptr, 0}
@@ -351,7 +358,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
   int opt_char;
   int option_index = 0;
 
-  while ((opt_char = getopt_long(new_argc, new_argv_ptr, "hd", long_options, &option_index)) != -1) {
+  while ((opt_char = getopt_long(new_argc, new_argv_ptr, "hdo:", long_options, &option_index)) != -1) {
     switch (opt_char) {
       case 'h':
         print_help(argv[0]);
@@ -454,6 +461,10 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
 
       case 'p':
         opt.dump_output_prefix = optarg;
+        break;
+
+      case 'o':
+        opt.output_file = optarg;
         break;
 
       case 'd':
@@ -576,6 +587,9 @@ int main(int argc, char** argv) {
       return 1;
     }
 
+    // Create output structure to receive encoding results
+    CodecOutput codec_output;
+
     // Call anicet_experiment()
     int result = anicet_experiment(
         reinterpret_cast<const uint8_t*>(image_data.data()),
@@ -588,37 +602,136 @@ int main(int argc, char** argv) {
         opt.dump_output,
         opt.dump_output_dir.c_str(),
         opt.dump_output_prefix.c_str(),
-        opt.debug
+        opt.debug,
+        &codec_output
     );
 
-    long t1_ms = now_ms_monotonic();
-    long wall_ms = t1_ms - t0_ms;
+    // Print simple debug output to stdout if debug level > 1
+    if (opt.debug > 1) {
+      printf("input: %s\n", opt.image_file.c_str());
+      printf("width: %d\n", opt.width);
+      printf("height: %d\n", opt.height);
+      printf("color_format: %s\n", opt.color_format.c_str());
+      printf("size_bytes: %zu\n", image_data.size());
+      printf("num_runs: %d\n", opt.num_runs);
+      for (size_t i = 0; i < codec_output.num_frames(); i++) {
+        printf("index: %zu\n", i);
+        printf("  codec: %s\n", opt.codec.c_str());
+        if (i < codec_output.frame_sizes.size()) {
+          printf("  size_bytes: %zu\n", codec_output.frame_sizes[i]);
+        }
+        printf("  exit_code: %d\n", result);
+      }
+    }
 
-    // Output results
-    if (opt.json) {
-      printf("{");
-      bool first = true;
-      auto emit_ki = [&](const char* k, long v) {
-        printf("%s\"%s\":%ld", first ? "" : ",", k, v);
-        first = false;
-      };
-      for (auto& kv : opt.tags) {
-        printf("%s\"%s\":\"%s\"", first ? "" : ",", kv.first.c_str(), kv.second.c_str());
-        first = false;
+    // Determine output file - default to stdout ("-")
+    FILE* output_fp = stdout;
+    bool close_output = false;
+
+    if (opt.output_file != "-") {
+      output_fp = fopen(opt.output_file.c_str(), "w");
+      if (!output_fp) {
+        fprintf(stderr, "Failed to open output file: %s\n", opt.output_file.c_str());
+        output_fp = stdout;
+      } else {
+        close_output = true;
       }
-      emit_ki("wall_ms", wall_ms);
-      emit_ki("exit", result);
-      printf("}\n");
-    } else {
-      bool first = true;
-      for (auto& kv : opt.tags) {
-        printf("%s%s=%s", first ? "" : ",", kv.first.c_str(), kv.second.c_str());
-        first = false;
+    }
+
+    // Build JSON output using nlohmann::json
+    // Use ordered_json to preserve insertion order (input, setup, output, resources)
+    using json = nlohmann::ordered_json;
+    json output_json;
+
+    // Input section
+    output_json["input"] = {
+      {"file", opt.image_file},
+      {"width", opt.width},
+      {"height", opt.height},
+      {"color_format", opt.color_format},
+      {"size_bytes", image_data.size()}
+    };
+
+    // Setup section
+    output_json["setup"]["codec"] = opt.codec;
+    output_json["setup"]["num_runs"] = opt.num_runs;
+    // Add device and other tags to setup section if present
+    for (const auto& kv : opt.tags) {
+      output_json["setup"][kv.first] = kv.second;
+    }
+
+    // Output section - frames array with exit_code and size_bytes per frame
+    output_json["output"]["frames"] = json::array();
+    for (size_t i = 0; i < codec_output.num_frames(); i++) {
+      json output_frame;
+      output_frame["exit_code"] = result;
+      if (i < codec_output.frame_sizes.size()) {
+        output_frame["size_bytes"] = codec_output.frame_sizes[i];
       }
-      if (first) {
-        printf("run=na");
+      output_json["output"]["frames"].push_back(output_frame);
+    }
+
+    // Resources section - global
+    // Use resource_delta for detailed metrics
+    const ResourceDelta& delta = codec_output.resource_delta;
+    output_json["resources"]["global"]["wall_time_ms"] = delta.wall_time_ms;
+
+    // CPU time breakdown
+    output_json["resources"]["global"]["cpu_time"]["total_ms"] = delta.cpu_time_ms;
+    output_json["resources"]["global"]["cpu_time"]["user_time_ms"] = delta.user_time_ms;
+    output_json["resources"]["global"]["cpu_time"]["system_time_ms"] = delta.system_time_ms;
+
+    // CPU utilization percentage
+    if (delta.wall_time_ms > 0) {
+      output_json["resources"]["global"]["cpu_time"]["utilization_percent"] =
+        (delta.cpu_time_ms / delta.wall_time_ms * 100.0);
+    }
+
+    // Memory statistics
+    output_json["resources"]["global"]["memory_rss_kb"] = delta.vm_rss_delta_kb;
+    output_json["resources"]["global"]["memory_vss_kb"] = delta.vm_size_delta_kb;
+
+    // Page faults
+    output_json["resources"]["global"]["page_faults"]["minor"] = delta.minor_faults;
+    output_json["resources"]["global"]["page_faults"]["major"] = delta.major_faults;
+
+    // Context switches
+    output_json["resources"]["global"]["context_switches"]["voluntary"] = delta.vol_ctx_switches;
+    output_json["resources"]["global"]["context_switches"]["involuntary"] = delta.invol_ctx_switches;
+
+    // Frames array
+    output_json["resources"]["frames"] = json::array();
+    for (size_t i = 0; i < codec_output.num_frames(); i++) {
+      json frame;
+      frame["frame_index"] = i;
+
+      // Frame size
+      if (i < codec_output.frame_sizes.size()) {
+        frame["size_bytes"] = codec_output.frame_sizes[i];
       }
-      printf(",wall_ms=%ld,exit=%d\n", wall_ms, result);
+
+      // Frame timing
+      if (i < codec_output.timings.size()) {
+        frame["input_timestamp_us"] = codec_output.timings[i].input_timestamp_us;
+        frame["output_timestamp_us"] = codec_output.timings[i].output_timestamp_us;
+        int64_t encode_time_us = codec_output.timings[i].output_timestamp_us -
+                                 codec_output.timings[i].input_timestamp_us;
+        frame["encode_time_us"] = encode_time_us;
+      }
+
+      // CPU time for this frame
+      if (i < codec_output.profile_encode_cpu_ms.size()) {
+        frame["cpu_time_ms"] = codec_output.profile_encode_cpu_ms[i];
+      }
+
+      output_json["resources"]["frames"].push_back(frame);
+    }
+
+    // Output JSON to file with pretty printing (2-space indent)
+    fprintf(output_fp, "%s\n", output_json.dump(2).c_str());
+
+    if (close_output) {
+      fclose(output_fp);
     }
 
     // Flush pending binder commands to ensure clean shutdown

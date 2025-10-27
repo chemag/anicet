@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "resource_profiler.h"
+
 #ifdef __cplusplus
 #include <vector>
 #endif
@@ -58,6 +60,8 @@ struct CodecOutput {
   std::vector<double> profile_encode_cpu_ms;
   // Peak memory usage (kilobytes)
   long profile_encode_mem_kb;
+  // Detailed resource usage delta for the encoding operation
+  ResourceDelta resource_delta;
 
   // Helper method to get number of frames
   size_t num_frames() const { return frame_buffers.size(); }
@@ -130,6 +134,8 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
 //   "anicet.output")
 //   debug_level:        Debug output level (0 = disabled, higher = more
 //   verbose)
+//   output:             Optional output structure to receive encoding results
+//                       (can be nullptr if not needed)
 //
 // Returns:
 //   Number of encoding errors (0 = all succeeded)
@@ -137,7 +143,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
                       const char* codec_name, int num_runs, bool dump_output,
                       const char* dump_output_dir,
-                      const char* dump_output_prefix, int debug_level);
+                      const char* dump_output_prefix, int debug_level,
+                      CodecOutput* output = nullptr);
 
 #endif  // __cplusplus
 

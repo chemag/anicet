@@ -21,7 +21,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
                       const char* codec_name, int num_runs, bool dump_output,
                       const char* dump_output_dir,
-                      const char* dump_output_prefix, int debug_level) {
+                      const char* dump_output_prefix, int debug_level,
+                      CodecOutput* output) {
   // Validate inputs
   if (!buffer || buf_size == 0 || height <= 0 || width <= 0 || !color_format ||
       !codec_name) {
@@ -52,9 +53,6 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   bool run_svtav1 = run_all || (strcmp(codec_name, "svt-av1") == 0);
   bool run_mediacodec = run_all || (strcmp(codec_name, "mediacodec") == 0);
 
-  printf("Encoding %dx%d %s image (%zu bytes) with codec: %s...\n", width,
-         height, color_format, buf_size, codec_name);
-
   // Create CodecInput struct for all encoders
   CodecInput input;
   input.input_buffer = buffer;
@@ -67,27 +65,28 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 1. WebP encoding
   if (run_webp) {
-    printf("\n--- WebP ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_webp(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("WebP: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
-             (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_webp(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename), "%s/%s.webp.%02zu.webp",
                    dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "WebP: Encoding failed\n");
@@ -97,27 +96,28 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 1b. WebP encoding (nonopt)
   if (run_webp_nonopt) {
-    printf("\n--- WebP (nonopt) ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_webp_nonopt(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("WebP (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
-             last_size, (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_webp_nonopt(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename), "%s/%s.webp-nonopt.%02zu.webp",
                    dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "WebP (nonopt): Encoding failed\n");
@@ -127,27 +127,28 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 2. libjpeg-turbo encoding (opt)
   if (run_libjpeg_turbo) {
-    printf("\n--- libjpeg-turbo ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_libjpegturbo(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("TurboJPEG: Encoded to %zu bytes (%.2f%% of original)\n",
-             last_size, (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_libjpegturbo(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename), "%s/%s.libjpegturbo.%02zu.jpeg",
                    dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "TurboJPEG: Encoding failed\n");
@@ -157,28 +158,29 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 2b. libjpeg-turbo encoding (nonopt)
   if (run_libjpeg_turbo_nonopt) {
-    printf("\n--- libjpeg-turbo (nonopt) ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_libjpegturbo_nonopt(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("TurboJPEG (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
-             last_size, (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_libjpegturbo_nonopt(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename),
                    "%s/%s.libjpegturbo-nonopt.%02zu.jpeg", dump_output_dir,
                    dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "TurboJPEG (nonopt): Encoding failed\n");
@@ -188,27 +190,28 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 3. jpegli encoding
   if (run_jpegli) {
-    printf("\n--- jpegli ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_jpegli(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("jpegli: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
-             (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_jpegli(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename), "%s/%s.jpegli.%02zu.jpeg",
                    dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "jpegli: Encoding failed\n");
@@ -218,27 +221,28 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 4. x265 (H.265/HEVC) 8-bit encoding (opt)
   if (run_x265_8bit) {
-    printf("\n--- x265 (H.265/HEVC) 8-bit ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_x265_8bit(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("x265-8bit: Encoded to %zu bytes (%.2f%% of original)\n",
-             last_size, (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_x265_8bit(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename), "%s/%s.x265-8bit.%02zu.265",
                    dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "x265-8bit: Encoding failed\n");
@@ -248,28 +252,29 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 4b. x265 (H.265/HEVC) 8-bit encoding (nonopt)
   if (run_x265_8bit_nonopt) {
-    printf("\n--- x265 (H.265/HEVC) 8-bit (nonopt) ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_x265_8bit_nonopt(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("x265-8bit (nonopt): Encoded to %zu bytes (%.2f%% of original)\n",
-             last_size, (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_x265_8bit_nonopt(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename),
                    "%s/%s.x265-8bit-nonopt.%02zu.265", dump_output_dir,
                    dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "x265-8bit (nonopt): Encoding failed\n");
@@ -279,27 +284,28 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 5. SVT-AV1 encoding
   if (run_svtav1) {
-    printf("\n--- SVT-AV1 ---\n");
-    CodecOutput output;
-    output.dump_output = dump_output;
-    if (anicet_run_svtav1(&input, num_runs, &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("SVT-AV1: Encoded to %zu bytes (%.2f%% of original)\n", last_size,
-             (last_size * 100.0) / buf_size);
-
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
+    if (anicet_run_svtav1(&input, num_runs, &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename), "%s/%s.svtav1.%02zu.av1",
                    dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "SVT-AV1: Encoding failed\n");
@@ -309,39 +315,38 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   // 6. Android MediaCodec encoding (only on Android)
   if (run_mediacodec) {
-    printf("\n--- Android MediaCodec ---\n");
 #ifdef __ANDROID__
-    CodecOutput output;
-    output.dump_output = dump_output;
+    CodecOutput local_output;
+    local_output.dump_output = dump_output;
     if (anicet_run_mediacodec(&input, "c2.android.hevc.encoder", num_runs,
-                              &output) == 0 &&
-        output.num_frames() > 0) {
-      size_t last_size = output.frame_sizes[output.num_frames() - 1];
-      printf("MediaCodec: Encoded to %zu bytes (%.2f%% of original)\n",
-             last_size, (last_size * 100.0) / buf_size);
-
+                              &local_output) == 0 &&
+        local_output.num_frames() > 0) {
       // Write output files if requested
       if (dump_output) {
-        for (size_t i = 0; i < output.num_frames(); i++) {
+        for (size_t i = 0; i < local_output.num_frames(); i++) {
           char filename[512];
           snprintf(filename, sizeof(filename), "%s/%s.mediacodec.%02zu.bin",
                    dump_output_dir, dump_output_prefix, i);
           FILE* f = fopen(filename, "wb");
           if (f) {
-            fwrite(output.frame_buffers[i].data(), 1, output.frame_sizes[i], f);
+            fwrite(local_output.frame_buffers[i].data(), 1,
+                   local_output.frame_sizes[i], f);
             fclose(f);
           }
         }
+      }
+
+      // Copy results to output parameter if provided
+      if (output != nullptr) {
+        *output = std::move(local_output);
       }
     } else {
       fprintf(stderr, "MediaCodec: Encoding failed\n");
       errors++;
     }
 #else
-    printf("MediaCodec: Skipped (not on Android)\n");
 #endif
   }
 
-  printf("\n=== Encoding complete: %d errors ===\n", errors);
   return errors;
 }
