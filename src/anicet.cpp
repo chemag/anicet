@@ -426,14 +426,36 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
 
       case 'C': {
         opt.codec = optarg;
-        // Validate codec name
+        // Validate codec name(s) - supports comma-separated list
         std::set<std::string> valid_codecs = {
           "x265-8bit", "x265-8bit-nonopt", "svt-av1", "libjpeg-turbo",
           "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
           "mediacodec", "all"
         };
-        if (valid_codecs.find(opt.codec) == valid_codecs.end()) {
-          fprintf(stderr, "Invalid codec: %s\n", opt.codec.c_str());
+        // Split by comma and validate each codec
+        std::string codec_list = opt.codec;
+        size_t pos = 0;
+        bool all_valid = true;
+        while (pos < codec_list.length()) {
+          size_t comma = codec_list.find(',', pos);
+          if (comma == std::string::npos) {
+            comma = codec_list.length();
+          }
+          // Extract codec name (trim spaces)
+          size_t start = pos;
+          while (start < comma && codec_list[start] == ' ') start++;
+          size_t end = comma;
+          while (end > start && codec_list[end - 1] == ' ') end--;
+
+          std::string codec = codec_list.substr(start, end - start);
+          if (valid_codecs.find(codec) == valid_codecs.end()) {
+            fprintf(stderr, "Invalid codec: %s\n", codec.c_str());
+            all_valid = false;
+            break;
+          }
+          pos = comma + 1;
+        }
+        if (!all_valid) {
           return false;
         }
         break;
@@ -619,7 +641,24 @@ int main(int argc, char** argv) {
         if (opt.dump_output && i < codec_output.output_files.size()) {
           printf("  file: %s\n", codec_output.output_files[i].c_str());
         }
-        printf("  codec: %s\n", opt.codec.c_str());
+        // Extract codec name from filename if available, otherwise use full list
+        std::string codec_name = opt.codec;
+        if (i < codec_output.output_files.size()) {
+          std::string filename = codec_output.output_files[i];
+          // Find the codec name in pattern: <prefix>.<codec>.index_<n>...
+          size_t prefix_end = filename.find(opt.dump_output_prefix);
+          if (prefix_end != std::string::npos) {
+            prefix_end += opt.dump_output_prefix.length();
+            if (prefix_end < filename.length() && filename[prefix_end] == '.') {
+              prefix_end++; // Skip the dot after prefix
+              size_t codec_end = filename.find(".index_", prefix_end);
+              if (codec_end != std::string::npos) {
+                codec_name = filename.substr(prefix_end, codec_end - prefix_end);
+              }
+            }
+          }
+        }
+        printf("  codec: %s\n", codec_name.c_str());
         if (i < codec_output.frame_sizes.size()) {
           printf("  size_bytes: %zu\n", codec_output.frame_sizes[i]);
         }

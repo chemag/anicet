@@ -38,7 +38,7 @@ inline bool init_binder_thread_pool(int debug_level = 0) {
     return true;
   }
 
-  BINDER_DEBUG(debug_level, 1,
+  BINDER_DEBUG(debug_level, 2,
                "Attempting alternative binder initialization...");
   g_binder_debug_level = debug_level;
 

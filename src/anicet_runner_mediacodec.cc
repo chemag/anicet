@@ -9,6 +9,12 @@
 #include "anicet_common.h"
 #include "resource_profiler.h"
 
+// Global debug level (set in encode function)
+static int g_debug_level = 0;
+
+// Use unified DEBUG macro from anicet_common.h
+#define DEBUG(level, ...) ANICET_DEBUG(g_debug_level, level, __VA_ARGS__)
+
 // Android MediaCodec encoder - wrapper that adapts
 // android_mediacodec_encode_frame()
 int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
@@ -55,8 +61,8 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
       if (format.debug_level > 1) {
         int64_t encode_time_us = output->timings[i].output_timestamp_us -
                                  output->timings[i].input_timestamp_us;
-        printf("Frame %zu: encode time = %lld us\n", i,
-               (long long)encode_time_us);
+        DEBUG(2, "Frame %zu: encode time = %lld us\n", i,
+              (long long)encode_time_us);
       }
     }
   } else {
