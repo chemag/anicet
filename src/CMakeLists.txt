@@ -76,6 +76,7 @@ target_link_libraries(anicet PRIVATE
     ${CMAKE_INSTALL_PREFIX}/lib/libwebp.a
     ${CMAKE_INSTALL_PREFIX}/lib/libhwy.a
     ${CMAKE_INSTALL_PREFIX}/lib/libsharpyuv.a
+    nlohmann_json::nlohmann_json
 )
 
 # Link android_mediacodec_lib on Android

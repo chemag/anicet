@@ -22,3 +22,7 @@
 [submodule "lib/libwebp"]
 	path = lib/libwebp
 	url = https://chromium.googlesource.com/webm/libwebp
+
+[submodule "lib/nlohmann-json"]
+	path = lib/nlohmann-json
+	url = https://github.com/nlohmann/json

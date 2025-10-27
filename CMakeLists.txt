@@ -390,6 +390,11 @@ if(BUILD_ENCODERS)
     endif()
 endif()
 
+# Add nlohmann-json library (header-only)
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+add_subdirectory(lib/nlohmann-json)
+
 # Add anicet wrapper
 add_subdirectory(src)
 
