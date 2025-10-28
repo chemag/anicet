@@ -147,21 +147,29 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   int errors = 0;
 
   // 1. WebP encoding
-  if (run_webp) {
+  if (run_webp || run_webp_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
-    setup.parameter_map["optimization"] = "opt";
+    if (run_webp) {
+      setup.parameter_map["optimization"] = "opt";
+    } else if (run_webp_nonopt) {
+      setup.parameter_map["optimization"] = "nonopt";
+    }
     if (anicet::runner::webp::anicet_run(&input, &setup, &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
+        std::string optimization =
+            std::get<std::string>(setup.parameter_map["optimization"]);
         snprintf(filename, sizeof(filename),
-                 "%s/%s.webp.index_%zu.width_%d.height_%d.color_%s.webp",
-                 dump_output_dir, dump_output_prefix, i, width, height,
-                 color_format);
+                 "%s/"
+                 "%s.webp.optimization_%s.index_%zu.width_%d.height_%d.color_%"
+                 "s.webp",
+                 dump_output_dir, dump_output_prefix, optimization.c_str(), i,
+                 width, height, color_format);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -185,105 +193,31 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     }
   }
 
-  // 1b. WebP encoding (nonopt)
-  if (run_webp_nonopt) {
+  // 2. libjpeg-turbo encoding
+  if (run_libjpeg_turbo || run_libjpeg_turbo_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
-    setup.parameter_map["optimization"] = "nonopt";
-    if (anicet::runner::webp::anicet_run(&input, &setup, &local_output) == 0 &&
-        local_output.num_frames() > 0) {
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
-        snprintf(filename, sizeof(filename),
-                 "%s/%s.webp-nonopt.index_%zu.width_%d.height_%d.color_%s.webp",
-                 dump_output_dir, dump_output_prefix, i, width, height,
-                 color_format);
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "WebP (nonopt): Encoding failed\n");
-      errors++;
+    if (run_libjpeg_turbo) {
+      setup.parameter_map["optimization"] = "opt";
+    } else if (run_libjpeg_turbo_nonopt) {
+      setup.parameter_map["optimization"] = "nonopt";
     }
-  }
-
-  // 2. libjpeg-turbo encoding (opt)
-  if (run_libjpeg_turbo) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-    setup.parameter_map["optimization"] = "opt";
     if (anicet::runner::libjpegturbo::anicet_run(&input, &setup,
                                                  &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
-        snprintf(
-            filename, sizeof(filename),
-            "%s/%s.libjpegturbo.index_%zu.width_%d.height_%d.color_%s.jpeg",
-            dump_output_dir, dump_output_prefix, i, width, height,
-            color_format);
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "TurboJPEG: Encoding failed\n");
-      errors++;
-    }
-  }
-
-  // 2b. libjpeg-turbo encoding (nonopt)
-  if (run_libjpeg_turbo_nonopt) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-    setup.parameter_map["optimization"] = "nonopt";
-    if (anicet::runner::libjpegturbo::anicet_run(&input, &setup,
-                                                 &local_output) == 0 &&
-        local_output.num_frames() > 0) {
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
+        std::string optimization =
+            std::get<std::string>(setup.parameter_map["optimization"]);
         snprintf(filename, sizeof(filename),
                  "%s/"
-                 "%s.libjpegturbo-nonopt.index_%"
-                 "zu.width_%d.height_%d.color_%s.jpeg",
-                 dump_output_dir, dump_output_prefix, i, width, height,
-                 color_format);
+                 "%s.libjpegturbo.optimization_%s.index_%zu.width_%d.height_%d."
+                 "color_%s.jpeg",
+                 dump_output_dir, dump_output_prefix, optimization.c_str(), i,
+                 width, height, color_format);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -302,7 +236,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         append_codec_output(output, local_output);
       }
     } else {
-      fprintf(stderr, "TurboJPEG (nonopt): Encoding failed\n");
+      fprintf(stderr, "libjpeg-turbo: Encoding failed\n");
       errors++;
     }
   }
@@ -346,22 +280,30 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     }
   }
 
-  // 4. x265 (H.265/HEVC) 8-bit encoding (opt)
-  if (run_x265_8bit) {
+  // 4. x265 (H.265/HEVC) 8-bit encoding
+  if (run_x265_8bit || run_x265_8bit_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
-    setup.parameter_map["optimization"] = "opt";
+    if (run_x265_8bit) {
+      setup.parameter_map["optimization"] = "opt";
+    } else if (run_x265_8bit_nonopt) {
+      setup.parameter_map["optimization"] = "nonopt";
+    }
     if (anicet::runner::x265::anicet_run(&input, &setup, &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
+        std::string optimization =
+            std::get<std::string>(setup.parameter_map["optimization"]);
         snprintf(filename, sizeof(filename),
-                 "%s/%s.x265-8bit.index_%zu.width_%d.height_%d.color_%s.265",
-                 dump_output_dir, dump_output_prefix, i, width, height,
-                 color_format);
+                 "%s/"
+                 "%s.x265-8bit.optimization_%s.index_%zu.width_%d.height_%d."
+                 "color_%s.265",
+                 dump_output_dir, dump_output_prefix, optimization.c_str(), i,
+                 width, height, color_format);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -381,47 +323,6 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       }
     } else {
       fprintf(stderr, "x265-8bit: Encoding failed\n");
-      errors++;
-    }
-  }
-
-  // 4b. x265 (H.265/HEVC) 8-bit encoding (nonopt)
-  if (run_x265_8bit_nonopt) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-    setup.parameter_map["optimization"] = "nonopt";
-    if (anicet::runner::x265::anicet_run(&input, &setup, &local_output) == 0 &&
-        local_output.num_frames() > 0) {
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
-        snprintf(
-            filename, sizeof(filename),
-            "%s/"
-            "%s.x265-8bit-nonopt.index_%zu.width_%d.height_%d.color_%s.265",
-            dump_output_dir, dump_output_prefix, i, width, height,
-            color_format);
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "x265-8bit (nonopt): Encoding failed\n");
       errors++;
     }
   }
