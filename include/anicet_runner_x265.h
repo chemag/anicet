@@ -12,10 +12,8 @@ namespace anicet {
 namespace runner {
 namespace x265 {
 
-// Runner with optimization parameter - dispatches to opt or nonopt
-// implementation
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output,
-               const std::string& optimization);
+// Runner - dispatches to opt or nonopt based on setup parameters
+int anicet_run(const CodecInput* input, CodecSetup* setup, CodecOutput* output);
 
 }  // namespace x265
 }  // namespace runner

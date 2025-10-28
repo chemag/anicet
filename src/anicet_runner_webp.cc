@@ -17,11 +17,14 @@ namespace runner {
 namespace webp {
 
 // WebP encoder - writes to caller-provided memory buffer only
-int anicet_run_opt(const CodecInput* input, int num_runs, CodecOutput* output) {
+int anicet_run_opt(const CodecInput* input, CodecSetup* setup,
+                   CodecOutput* output) {
   // Validate inputs
-  if (!input || !input->input_buffer || !output) {
+  if (!input || !input->input_buffer || !setup || !output) {
     return -1;
   }
+
+  int num_runs = setup->num_runs;
 
   // Initialize output
   output->frame_buffers.clear();
@@ -146,12 +149,14 @@ int anicet_run_opt(const CodecInput* input, int num_runs, CodecOutput* output) {
 
 // WebP encoder (non-optimized) - uses dlopen to avoid symbol conflicts
 // Dynamically loads libwebp-nonopt.so with RTLD_LOCAL for symbol isolation
-int anicet_run_nonopt(const CodecInput* input, int num_runs,
+int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
                       CodecOutput* output) {
   // Validate inputs
-  if (!input || !input->input_buffer || !output) {
+  if (!input || !input->input_buffer || !setup || !output) {
     return -1;
   }
+
+  int num_runs = setup->num_runs;
 
   // Initialize output
   output->frame_buffers.clear();
@@ -323,14 +328,24 @@ int anicet_run_nonopt(const CodecInput* input, int num_runs,
   return result;
 }
 
-// Runner with optimization parameter - dispatches to opt or nonopt
-// implementation
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output,
-               const std::string& optimization) {
+// Runner - dispatches to opt or nonopt based on setup parameters
+int anicet_run(const CodecInput* input, CodecSetup* setup,
+               CodecOutput* output) {
+  if (!setup) {
+    return -1;
+  }
+
+  // Check for "optimization" parameter, default to "opt"
+  std::string optimization = "opt";
+  auto it = setup->parameter_map.find("optimization");
+  if (it != setup->parameter_map.end()) {
+    optimization = std::get<std::string>(it->second);
+  }
+
   if (optimization == "nonopt") {
-    return anicet_run_nonopt(input, num_runs, output);
+    return anicet_run_nonopt(input, setup, output);
   } else {
-    return anicet_run_opt(input, num_runs, output);
+    return anicet_run_opt(input, setup, output);
   }
 }
 

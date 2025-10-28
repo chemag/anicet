@@ -21,12 +21,22 @@ static int g_debug_level = 0;
 
 // Android MediaCodec encoder - wrapper that adapts
 // android_mediacodec_encode_frame()
-int anicet_run(const CodecInput* input, const char* codec_name, int num_runs,
+int anicet_run(const CodecInput* input, CodecSetup* setup,
                CodecOutput* output) {
   // Validate inputs
-  if (!input || !input->input_buffer || !output || !codec_name) {
+  if (!input || !input->input_buffer || !setup || !output) {
     return -1;
   }
+
+  int num_runs = setup->num_runs;
+
+  // Extract codec_name from parameter_map
+  auto it = setup->parameter_map.find("codec_name");
+  if (it == setup->parameter_map.end()) {
+    fprintf(stderr, "MediaCodec: codec_name parameter not found in setup\n");
+    return -1;
+  }
+  const char* codec_name = std::get<std::string>(it->second).c_str();
 
 #ifdef __ANDROID__
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)

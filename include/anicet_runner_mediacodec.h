@@ -13,8 +13,8 @@ namespace runner {
 namespace mediacodec {
 
 // Android MediaCodec encoder (Android only)
-int anicet_run(const CodecInput* input, const char* codec_name, int num_runs,
-               CodecOutput* output);
+// Expects "codec_name" parameter in setup->parameter_map
+int anicet_run(const CodecInput* input, CodecSetup* setup, CodecOutput* output);
 
 }  // namespace mediacodec
 }  // namespace runner

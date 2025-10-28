@@ -10,6 +10,9 @@
 #include "resource_profiler.h"
 
 #ifdef __cplusplus
+#include <map>
+#include <string>
+#include <variant>
 #include <vector>
 #endif
 
@@ -27,6 +30,18 @@ typedef struct {
 
 #ifdef __cplusplus
 }
+
+// Codec setup parameters (C++ only)
+// Generic mechanism for passing codec-specific parameters
+using CodecSetupValue = std::variant<int, double, std::string>;
+using CodecSetupParameterMap = std::map<std::string, CodecSetupValue>;
+
+struct CodecSetup {
+  // Number of runs per experiment
+  int num_runs;
+  // Codec-specific parameters
+  CodecSetupParameterMap parameter_map;
+};
 
 // Codec input data (C++ only)
 // This structure holds all input parameters for encoding

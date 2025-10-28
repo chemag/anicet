@@ -13,7 +13,7 @@ namespace runner {
 namespace svtav1 {
 
 // SVT-AV1 encoder
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output);
+int anicet_run(const CodecInput* input, CodecSetup* setup, CodecOutput* output);
 
 }  // namespace svtav1
 }  // namespace runner

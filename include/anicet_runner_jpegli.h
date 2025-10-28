@@ -13,7 +13,7 @@ namespace runner {
 namespace jpegli {
 
 // jpegli encoder (JPEG XL's JPEG encoder)
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output);
+int anicet_run(const CodecInput* input, CodecSetup* setup, CodecOutput* output);
 
 }  // namespace jpegli
 }  // namespace runner

@@ -24,11 +24,14 @@ namespace runner {
 namespace svtav1 {
 
 // SVT-AV1 encoder - writes to caller-provided memory buffer only
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output) {
+int anicet_run(const CodecInput* input, CodecSetup* setup,
+               CodecOutput* output) {
   // Validate inputs
-  if (!input || !input->input_buffer || !output) {
+  if (!input || !input->input_buffer || !setup || !output) {
     return -1;
   }
+
+  int num_runs = setup->num_runs;
 
   // Initialize output
   output->frame_buffers.clear();
