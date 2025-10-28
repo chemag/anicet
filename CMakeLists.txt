@@ -328,9 +328,10 @@ if(BUILD_ENCODERS)
     endif()
 
     if(BUILD_LIBWEBP)
-        ExternalProject_Add(libwebp-lib
+        ExternalProject_Add(libwebp-lib-opt
+            PREFIX ${CMAKE_BINARY_DIR}/libwebp-lib-prefix-opt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libwebp
-            BINARY_DIR ${CMAKE_BINARY_DIR}/libwebp-build
+            BINARY_DIR ${CMAKE_BINARY_DIR}/libwebp-build-opt
             CMAKE_CACHE_ARGS
                 ${ENCODER_CMAKE_CACHE_ARGS}
             CMAKE_ARGS
@@ -353,6 +354,7 @@ if(BUILD_ENCODERS)
 
         # libwebp encoder - non-optimized version (no SIMD) - SHARED LIBRARY
         ExternalProject_Add(libwebp-lib-nonopt
+            PREFIX ${CMAKE_BINARY_DIR}/libwebp-lib-prefix-nonopt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libwebp
             BINARY_DIR ${CMAKE_BINARY_DIR}/libwebp-build-nonopt
             CMAKE_CACHE_ARGS
@@ -444,7 +446,7 @@ if(BUILD_ENCODERS)
         list(APPEND ENCODER_TARGETS jxs-lib)
     endif()
     if(BUILD_LIBWEBP)
-        list(APPEND ENCODER_TARGETS libwebp-lib libwebp-lib-nonopt)
+        list(APPEND ENCODER_TARGETS libwebp-lib-opt libwebp-lib-nonopt)
     endif()
 
     add_custom_target(encoders
