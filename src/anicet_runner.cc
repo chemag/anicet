@@ -188,11 +188,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         std::string optimization =
             std::get<std::string>(setup.parameter_map["optimization"]);
         snprintf(filename, sizeof(filename),
-                 "%s/"
-                 "%s.webp.optimization_%s.index_%zu.width_%d.height_%d.color_%"
-                 "s.webp",
-                 dump_output_dir, dump_output_prefix, optimization.c_str(), i,
-                 width, height, color_format);
+                 "%s/%s.webp.optimization_%s.index_%zu.webp", dump_output_dir,
+                 dump_output_prefix, optimization.c_str(), i);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -236,11 +233,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         std::string optimization =
             std::get<std::string>(setup.parameter_map["optimization"]);
         snprintf(filename, sizeof(filename),
-                 "%s/"
-                 "%s.libjpegturbo.optimization_%s.index_%zu.width_%d.height_%d."
-                 "color_%s.jpeg",
-                 dump_output_dir, dump_output_prefix, optimization.c_str(), i,
-                 width, height, color_format);
+                 "%s/%s.libjpegturbo.optimization_%s.index_%zu.jpeg",
+                 dump_output_dir, dump_output_prefix, optimization.c_str(), i);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -276,10 +270,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
-        snprintf(filename, sizeof(filename),
-                 "%s/%s.jpegli.index_%zu.width_%d.height_%d.color_%s.jpeg",
-                 dump_output_dir, dump_output_prefix, i, width, height,
-                 color_format);
+        snprintf(filename, sizeof(filename), "%s/%s.jpegli.index_%zu.jpeg",
+                 dump_output_dir, dump_output_prefix, i);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -325,11 +317,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         std::string optimization =
             std::get<std::string>(setup.parameter_map["optimization"]);
         snprintf(filename, sizeof(filename),
-                 "%s/"
-                 "%s.x265-8bit.optimization_%s.index_%zu.width_%d.height_%d."
-                 "color_%s.265",
-                 dump_output_dir, dump_output_prefix, optimization.c_str(), i,
-                 width, height, color_format);
+                 "%s/%s.x265-8bit.optimization_%s.index_%zu.265",
+                 dump_output_dir, dump_output_prefix, optimization.c_str(), i);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -365,10 +354,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
-        snprintf(filename, sizeof(filename),
-                 "%s/%s.svtav1.index_%zu.width_%d.height_%d.color_%s.av1",
-                 dump_output_dir, dump_output_prefix, i, width, height,
-                 color_format);
+        snprintf(filename, sizeof(filename), "%s/%s.svtav1.index_%zu.av1",
+                 dump_output_dir, dump_output_prefix, i);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -406,10 +393,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
-        snprintf(filename, sizeof(filename),
-                 "%s/%s.mediacodec.index_%zu.width_%d.height_%d.color_%s.bin",
-                 dump_output_dir, dump_output_prefix, i, width, height,
-                 color_format);
+        snprintf(filename, sizeof(filename), "%s/%s.mediacodec.index_%zu.bin",
+                 dump_output_dir, dump_output_prefix, i);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
