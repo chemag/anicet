@@ -68,20 +68,20 @@ target_compile_options(anicet PRIVATE
 )
 
 # Link encoder libraries
+# Note: x265, webp, and libjpeg-turbo use dlopen() and are not linked at compile time
 target_link_libraries(anicet PRIVATE
-    ${CMAKE_INSTALL_PREFIX}/lib/libx265-8bit.a
     ${CMAKE_INSTALL_PREFIX}/lib/libSvtAv1Enc.a
-    ${CMAKE_INSTALL_PREFIX}/lib/libjpeg.a
-    ${CMAKE_INSTALL_PREFIX}/lib/libturbojpeg.a
-    ${CMAKE_INSTALL_PREFIX}/lib/libwebp.a
     ${CMAKE_INSTALL_PREFIX}/lib/libhwy.a
-    ${CMAKE_INSTALL_PREFIX}/lib/libsharpyuv.a
+    ${CMAKE_BINARY_DIR}/jpegli-build/lib/jpegli/libjpeg.so
     nlohmann_json::nlohmann_json
 )
 
-# Link android_mediacodec_lib on Android
+# Link android_mediacodec_lib and system libraries
 if(ANDROID)
-    target_link_libraries(anicet PRIVATE android_mediacodec_lib)
+    target_link_libraries(anicet PRIVATE
+        android_mediacodec_lib
+        dl  # Required for dlopen/dlsym/dlclose
+    )
 else()
     # Add pthread and other system libraries (not needed on Android)
     target_link_libraries(anicet PRIVATE pthread m dl)

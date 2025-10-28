@@ -47,8 +47,9 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     optimization = std::get<std::string>(opt_it->second);
   }
 
-  const char* library_name =
-      (optimization == "nonopt") ? "libx265-8bit-nonopt.so" : "libx265-8bit.so";
+  const char* library_name = (optimization == "nonopt")
+                                 ? "libx265-8bit-nonopt.so"
+                                 : "libx265-8bit-opt.so";
 
   // (a) Codec setup - Load x265 library with RTLD_LOCAL to isolate symbols
   void* handle = dlopen(library_name, RTLD_NOW | RTLD_LOCAL);

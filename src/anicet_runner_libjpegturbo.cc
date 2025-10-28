@@ -47,8 +47,9 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     optimization = std::get<std::string>(opt_it->second);
   }
 
-  const char* library_name =
-      (optimization == "nonopt") ? "libturbojpeg-nonopt.so" : "libturbojpeg.so";
+  const char* library_name = (optimization == "nonopt")
+                                 ? "libturbojpeg-nonopt.so"
+                                 : "libturbojpeg-opt.so";
 
   // (a) Codec setup - Load libturbojpeg library with RTLD_LOCAL to isolate
   // symbols

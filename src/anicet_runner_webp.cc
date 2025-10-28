@@ -32,7 +32,7 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   }
 
   const char* library_name =
-      (optimization == "nonopt") ? "libwebp-nonopt.so" : "libwebp.so";
+      (optimization == "nonopt") ? "libwebp-nonopt.so" : "libwebp-opt.so";
 
   int num_runs = setup->num_runs;
 

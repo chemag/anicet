@@ -127,19 +127,20 @@ if(BUILD_ENCODERS)
                 -DCMAKE_ASM_FLAGS:STRING=${X265_ASM_FLAGS}
             CMAKE_ARGS
                 ${ENCODER_CMAKE_ARGS}
-                -DENABLE_SHARED=OFF
+                -DENABLE_SHARED=ON
+                -DENABLE_STATIC=OFF
                 -DENABLE_CLI=ON
                 -DHIGH_BIT_DEPTH=OFF
                 -DENABLE_ASSEMBLY=ON
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            # Install, then copy binary and shared library with 8bit-opt suffix
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
-            # Rename binaries and libraries to include 8bit suffix
-            COMMAND ${CMAKE_COMMAND} -E rename
+            COMMAND ${CMAKE_COMMAND} -E copy
                 ${ANICET_INSTALL_DIR}/bin/x265
-                ${ANICET_INSTALL_DIR}/bin/x265-8bit
-            COMMAND ${CMAKE_COMMAND} -E rename
-                ${ANICET_INSTALL_DIR}/lib/libx265.a
-                ${ANICET_INSTALL_DIR}/lib/libx265-8bit.a
+                ${ANICET_INSTALL_DIR}/bin/x265-8bit-opt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/lib/libx265.so
+                ${ANICET_INSTALL_DIR}/lib/libx265-8bit-opt.so
         )
 
         # x265 encoder - non-optimized version (no assembly) - SHARED LIBRARY
@@ -251,11 +252,24 @@ if(BUILD_ENCODERS)
                 ${ENCODER_CMAKE_CACHE_ARGS}
             CMAKE_ARGS
                 ${ENCODER_CMAKE_ARGS}
-                -DENABLE_SHARED=OFF
-                -DENABLE_STATIC=ON
+                -DENABLE_SHARED=ON
+                -DENABLE_STATIC=OFF
                 -DWITH_SIMD=ON
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            # Install libraries, then copy binaries and shared libraries to *-opt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/bin/cjpeg
+                ${ANICET_INSTALL_DIR}/bin/cjpeg-opt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/bin/djpeg
+                ${ANICET_INSTALL_DIR}/bin/djpeg-opt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/lib/libjpeg.so
+                ${ANICET_INSTALL_DIR}/lib/libjpeg-opt.so
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/lib/libturbojpeg.so
+                ${ANICET_INSTALL_DIR}/lib/libturbojpeg-opt.so
         )
 
         # libjpeg-turbo encoder - non-optimized version (no SIMD) - SHARED LIBRARY
@@ -340,7 +354,7 @@ if(BUILD_ENCODERS)
                 ${ENCODER_CMAKE_CACHE_ARGS}
             CMAKE_ARGS
                 ${ENCODER_CMAKE_ARGS}
-                -DBUILD_SHARED_LIBS=OFF
+                -DBUILD_SHARED_LIBS=ON
                 -DWEBP_BUILD_CWEBP=ON
                 -DWEBP_BUILD_DWEBP=ON
                 -DWEBP_ENABLE_SIMD=ON
@@ -353,7 +367,20 @@ if(BUILD_ENCODERS)
                 -DWEBP_BUILD_WEBPMUX=OFF
                 -DWEBP_BUILD_EXTRAS=OFF
             BUILD_COMMAND ${CMAKE_COMMAND} --build . --parallel
+            # Install libraries, then copy binaries and shared libraries to *-opt
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/bin/cwebp
+                ${ANICET_INSTALL_DIR}/bin/cwebp-opt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/bin/dwebp
+                ${ANICET_INSTALL_DIR}/bin/dwebp-opt
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/lib/libwebp.so
+                ${ANICET_INSTALL_DIR}/lib/libwebp-opt.so
+            COMMAND ${CMAKE_COMMAND} -E copy
+                ${ANICET_INSTALL_DIR}/lib/libsharpyuv.so
+                ${ANICET_INSTALL_DIR}/lib/libsharpyuv-opt.so
         )
 
         # libwebp encoder - non-optimized version (no SIMD) - SHARED LIBRARY
