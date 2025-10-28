@@ -12,9 +12,12 @@
 #include "resource_profiler.h"
 #include "turbojpeg.h"
 
+namespace anicet {
+namespace runner {
+namespace libjpegturbo {
+
 // libjpeg-turbo encoder - writes to caller-provided memory buffer only
-int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
-                            CodecOutput* output) {
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -99,8 +102,8 @@ int anicet_run_libjpegturbo(const CodecInput* input, int num_runs,
 // libjpeg-turbo encoder (non-optimized) - uses dlopen to avoid symbol
 // conflicts Dynamically loads libturbojpeg-nonopt.so with RTLD_LOCAL for
 // symbol isolation
-int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
-                                   CodecOutput* output) {
+int anicet_run_nonopt(const CodecInput* input, int num_runs,
+                      CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -218,3 +221,7 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
 
   return result;
 }
+
+}  // namespace libjpegturbo
+}  // namespace runner
+}  // namespace anicet

@@ -8,9 +8,17 @@
 
 #ifdef __cplusplus
 
+namespace anicet {
+namespace runner {
+namespace mediacodec {
+
 // Android MediaCodec encoder (Android only)
-int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
-                          int num_runs, CodecOutput* output);
+int anicet_run(const CodecInput* input, const char* codec_name, int num_runs,
+               CodecOutput* output);
+
+}  // namespace mediacodec
+}  // namespace runner
+}  // namespace anicet
 
 #endif  // __cplusplus
 

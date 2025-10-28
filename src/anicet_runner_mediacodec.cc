@@ -9,6 +9,10 @@
 #include "anicet_common.h"
 #include "resource_profiler.h"
 
+namespace anicet {
+namespace runner {
+namespace mediacodec {
+
 // Global debug level (set in encode function)
 static int g_debug_level = 0;
 
@@ -17,8 +21,8 @@ static int g_debug_level = 0;
 
 // Android MediaCodec encoder - wrapper that adapts
 // android_mediacodec_encode_frame()
-int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
-                          int num_runs, CodecOutput* output) {
+int anicet_run(const CodecInput* input, const char* codec_name, int num_runs,
+               CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output || !codec_name) {
     return -1;
@@ -87,3 +91,7 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
   return -1;
 #endif
 }
+
+}  // namespace mediacodec
+}  // namespace runner
+}  // namespace anicet

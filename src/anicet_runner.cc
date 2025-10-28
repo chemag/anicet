@@ -150,7 +150,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_webp) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_webp(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::webp::anicet_run(&input, num_runs, &local_output) ==
+            0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -186,7 +187,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_webp_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_webp_nonopt(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::webp::anicet_run_nonopt(&input, num_runs,
+                                                &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -222,7 +224,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_libjpeg_turbo) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_libjpegturbo(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::libjpegturbo::anicet_run(&input, num_runs,
+                                                 &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -259,7 +262,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_libjpeg_turbo_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_libjpegturbo_nonopt(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::libjpegturbo::anicet_run_nonopt(&input, num_runs,
+                                                        &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -297,7 +301,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_jpegli) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_jpegli(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::jpegli::anicet_run(&input, num_runs, &local_output) ==
+            0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -333,7 +338,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_x265_8bit) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_x265_8bit(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::x265::anicet_run(&input, num_runs, &local_output) ==
+            0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -369,7 +375,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_x265_8bit_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_x265_8bit_nonopt(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::x265::anicet_run_nonopt(&input, num_runs,
+                                                &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -407,7 +414,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_svtav1) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_svtav1(&input, num_runs, &local_output) == 0 &&
+    if (anicet::runner::svtav1::anicet_run(&input, num_runs, &local_output) ==
+            0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -444,8 +452,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 #ifdef __ANDROID__
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet_run_mediacodec(&input, "c2.android.hevc.encoder", num_runs,
-                              &local_output) == 0 &&
+    if (anicet::runner::mediacodec::anicet_run(
+            &input, "c2.android.hevc.encoder", num_runs, &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {

@@ -8,9 +8,16 @@
 
 #ifdef __cplusplus
 
+namespace anicet {
+namespace runner {
+namespace jpegli {
+
 // jpegli encoder (JPEG XL's JPEG encoder)
-int anicet_run_jpegli(const CodecInput* input, int num_runs,
-                      CodecOutput* output);
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output);
+
+}  // namespace jpegli
+}  // namespace runner
+}  // namespace anicet
 
 #endif  // __cplusplus
 

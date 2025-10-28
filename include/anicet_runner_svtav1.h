@@ -8,9 +8,16 @@
 
 #ifdef __cplusplus
 
+namespace anicet {
+namespace runner {
+namespace svtav1 {
+
 // SVT-AV1 encoder
-int anicet_run_svtav1(const CodecInput* input, int num_runs,
-                      CodecOutput* output);
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output);
+
+}  // namespace svtav1
+}  // namespace runner
+}  // namespace anicet
 
 #endif  // __cplusplus
 

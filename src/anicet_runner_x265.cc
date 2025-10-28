@@ -12,9 +12,12 @@
 #include "resource_profiler.h"
 #include "x265.h"
 
+namespace anicet {
+namespace runner {
+namespace x265 {
+
 // x265 encoder (8-bit) - writes to caller-provided memory buffer only
-int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
-                         CodecOutput* output) {
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -147,8 +150,8 @@ int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
 
 // x265 encoder (8-bit, non-optimized) - uses dlopen to avoid symbol conflicts
 // Dynamically loads libx265-8bit-nonopt.so with RTLD_LOCAL for symbol isolation
-int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
-                                CodecOutput* output) {
+int anicet_run_nonopt(const CodecInput* input, int num_runs,
+                      CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -328,3 +331,7 @@ int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
 
   return result;
 }
+
+}  // namespace x265
+}  // namespace runner
+}  // namespace anicet

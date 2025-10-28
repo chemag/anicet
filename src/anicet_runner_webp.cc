@@ -12,9 +12,12 @@
 #include "resource_profiler.h"
 #include "webp/encode.h"
 
+namespace anicet {
+namespace runner {
+namespace webp {
+
 // WebP encoder - writes to caller-provided memory buffer only
-int anicet_run_webp(const CodecInput* input, int num_runs,
-                    CodecOutput* output) {
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -143,8 +146,8 @@ int anicet_run_webp(const CodecInput* input, int num_runs,
 
 // WebP encoder (non-optimized) - uses dlopen to avoid symbol conflicts
 // Dynamically loads libwebp-nonopt.so with RTLD_LOCAL for symbol isolation
-int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
-                           CodecOutput* output) {
+int anicet_run_nonopt(const CodecInput* input, int num_runs,
+                      CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -319,3 +322,7 @@ int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
 
   return result;
 }
+
+}  // namespace webp
+}  // namespace runner
+}  // namespace anicet

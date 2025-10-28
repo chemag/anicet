@@ -8,12 +8,20 @@
 
 #ifdef __cplusplus
 
+namespace anicet {
+namespace runner {
+namespace webp {
+
 // WebP encoder - optimized
-int anicet_run_webp(const CodecInput* input, int num_runs, CodecOutput* output);
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output);
 
 // WebP encoder - non-optimized (no SIMD)
-int anicet_run_webp_nonopt(const CodecInput* input, int num_runs,
-                           CodecOutput* output);
+int anicet_run_nonopt(const CodecInput* input, int num_runs,
+                      CodecOutput* output);
+
+}  // namespace webp
+}  // namespace runner
+}  // namespace anicet
 
 #endif  // __cplusplus
 

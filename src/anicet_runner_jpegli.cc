@@ -11,9 +11,12 @@
 #include "jpeglib.h"
 #include "resource_profiler.h"
 
+namespace anicet {
+namespace runner {
+namespace jpegli {
+
 // jpegli encoder - writes to caller-provided memory buffer only
-int anicet_run_jpegli(const CodecInput* input, int num_runs,
-                      CodecOutput* output) {
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -191,3 +194,7 @@ int anicet_run_jpegli(const CodecInput* input, int num_runs,
 
   return result;
 }
+
+}  // namespace jpegli
+}  // namespace runner
+}  // namespace anicet

@@ -19,9 +19,12 @@
 
 #include "svt-av1/EbSvtAv1Enc.h"
 
+namespace anicet {
+namespace runner {
+namespace svtav1 {
+
 // SVT-AV1 encoder - writes to caller-provided memory buffer only
-int anicet_run_svtav1(const CodecInput* input, int num_runs,
-                      CodecOutput* output) {
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -241,3 +244,7 @@ int anicet_run_svtav1(const CodecInput* input, int num_runs,
 
   return result;
 }
+
+}  // namespace svtav1
+}  // namespace runner
+}  // namespace anicet
