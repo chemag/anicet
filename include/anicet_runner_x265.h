@@ -12,12 +12,10 @@ namespace anicet {
 namespace runner {
 namespace x265 {
 
-// x265 encoder (H.265/HEVC) 8-bit - optimized
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output);
-
-// x265 encoder (H.265/HEVC) 8-bit - non-optimized (no assembly)
-int anicet_run_nonopt(const CodecInput* input, int num_runs,
-                      CodecOutput* output);
+// Runner with optimization parameter - dispatches to opt or nonopt
+// implementation
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output,
+               const std::string& optimization);
 
 }  // namespace x265
 }  // namespace runner

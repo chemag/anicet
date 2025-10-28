@@ -17,7 +17,7 @@ namespace runner {
 namespace x265 {
 
 // x265 encoder (8-bit) - writes to caller-provided memory buffer only
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output) {
+int anicet_run_opt(const CodecInput* input, int num_runs, CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !output) {
     return -1;
@@ -330,6 +330,17 @@ int anicet_run_nonopt(const CodecInput* input, int num_runs,
                 &output->resource_delta);
 
   return result;
+}
+
+// Runner with optimization parameter - dispatches to opt or nonopt
+// implementation
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output,
+               const std::string& optimization) {
+  if (optimization == "nonopt") {
+    return anicet_run_nonopt(input, num_runs, output);
+  } else {
+    return anicet_run_opt(input, num_runs, output);
+  }
 }
 
 }  // namespace x265

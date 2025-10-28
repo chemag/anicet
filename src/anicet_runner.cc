@@ -150,8 +150,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_webp) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet::runner::webp::anicet_run(&input, num_runs, &local_output) ==
-            0 &&
+    if (anicet::runner::webp::anicet_run(&input, num_runs, &local_output,
+                                         "opt") == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -187,8 +187,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_webp_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet::runner::webp::anicet_run_nonopt(&input, num_runs,
-                                                &local_output) == 0 &&
+    if (anicet::runner::webp::anicet_run(&input, num_runs, &local_output,
+                                         "nonopt") == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -225,7 +225,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     CodecOutput local_output;
     local_output.dump_output = dump_output;
     if (anicet::runner::libjpegturbo::anicet_run(&input, num_runs,
-                                                 &local_output) == 0 &&
+                                                 &local_output, "opt") == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -262,8 +262,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_libjpeg_turbo_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet::runner::libjpegturbo::anicet_run_nonopt(&input, num_runs,
-                                                        &local_output) == 0 &&
+    if (anicet::runner::libjpegturbo::anicet_run(
+            &input, num_runs, &local_output, "nonopt") == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -338,8 +338,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_x265_8bit) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet::runner::x265::anicet_run(&input, num_runs, &local_output) ==
-            0 &&
+    if (anicet::runner::x265::anicet_run(&input, num_runs, &local_output,
+                                         "opt") == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
@@ -375,8 +375,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   if (run_x265_8bit_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
-    if (anicet::runner::x265::anicet_run_nonopt(&input, num_runs,
-                                                &local_output) == 0 &&
+    if (anicet::runner::x265::anicet_run(&input, num_runs, &local_output,
+                                         "nonopt") == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {

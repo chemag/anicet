@@ -12,12 +12,10 @@ namespace anicet {
 namespace runner {
 namespace webp {
 
-// WebP encoder - optimized
-int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output);
-
-// WebP encoder - non-optimized (no SIMD)
-int anicet_run_nonopt(const CodecInput* input, int num_runs,
-                      CodecOutput* output);
+// Runner with optimization parameter - dispatches to opt or nonopt
+// implementation
+int anicet_run(const CodecInput* input, int num_runs, CodecOutput* output,
+               const std::string& optimization);
 
 }  // namespace webp
 }  // namespace runner
