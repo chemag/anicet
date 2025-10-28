@@ -218,6 +218,38 @@ static std::map<std::string, long> parse_simpleperf_output(
 }
 
 
+// Get device serial number (from environment or system property)
+static std::string get_device_serial() {
+  // Try ANDROID_SERIAL environment variable first (set by adb)
+  const char* env_serial = getenv("ANDROID_SERIAL");
+  if (env_serial && env_serial[0] != '\0') {
+    return std::string(env_serial);
+  }
+
+#ifdef __ANDROID__
+  // Try ro.serialno system property on Android
+  FILE* pipe = popen("/system/bin/getprop ro.serialno 2>/dev/null", "r");
+  if (pipe) {
+    char buffer[256];
+    if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+      std::string serial(buffer);
+      // Remove trailing newline
+      if (!serial.empty() && serial.back() == '\n') {
+        serial.pop_back();
+      }
+      pclose(pipe);
+      if (!serial.empty()) {
+        return serial;
+      }
+    }
+    pclose(pipe);
+  }
+#endif
+
+  // Return "unknown" if no serial number is available
+  return "unknown";
+}
+
 // Default debug level
 #define DEFAULT_DEBUG_LEVEL 0
 
@@ -256,6 +288,8 @@ struct Options {
   int debug = DEFAULT_DEBUG_LEVEL;
   // output file for JSON results (default: stdout)
   std::string output_file = "-";
+  // device serial number (populated automatically)
+  std::string serial_number;
 };
 
 static void print_help(const char* argv0) {
@@ -561,6 +595,9 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  // Get device serial number
+  opt.serial_number = get_device_serial();
+
   install_signal_handlers();
 
   long t0_ms = now_ms_monotonic();
@@ -695,6 +732,7 @@ int main(int argc, char** argv) {
     };
 
     // Setup section
+    output_json["setup"]["serial_number"] = opt.serial_number;
     output_json["setup"]["codec"] = opt.codec;
     output_json["setup"]["num_runs"] = opt.num_runs;
     // Add device and other tags to setup section if present
