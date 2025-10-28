@@ -16,9 +16,10 @@ namespace anicet {
 namespace runner {
 namespace libjpegturbo {
 
-// libjpeg-turbo encoder - writes to caller-provided memory buffer only
-int anicet_run_opt(const CodecInput* input, CodecSetup* setup,
-                   CodecOutput* output) {
+// libjpeg-turbo encoder - uses dlopen to load library based on optimization
+// parameter
+int anicet_run(const CodecInput* input, CodecSetup* setup,
+               CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !setup || !output) {
     return -1;
@@ -39,100 +40,22 @@ int anicet_run_opt(const CodecInput* input, CodecSetup* setup,
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
   PROFILE_RESOURCES_START(profile_encode_mem);
 
-  // (a) Codec setup
-  tjhandle handle = tjInitCompress();
-  if (!handle) {
-    fprintf(stderr, "TurboJPEG: Failed to initialize compressor\n");
-    PROFILE_RESOURCES_END(profile_encode_mem);
-    return -1;
+  // Determine library name from optimization parameter
+  std::string optimization = "opt";
+  auto opt_it = setup->parameter_map.find("optimization");
+  if (opt_it != setup->parameter_map.end()) {
+    optimization = std::get<std::string>(opt_it->second);
   }
 
-  // (b) Input conversion: None needed - TurboJPEG takes YUV420 directly
+  const char* library_name =
+      (optimization == "nonopt") ? "libturbojpeg-nonopt.so" : "libturbojpeg.so";
 
-  // (c) Actual encoding - run num_runs times
-  int result = 0;
-  for (int run = 0; run < num_runs; run++) {
-    // Capture start timestamp
-    output->timings[run].input_timestamp_us = anicet_get_timestamp();
-    ResourceSnapshot frame_start;
-    capture_resources(&frame_start);
-
-    unsigned char* jpeg_buf = nullptr;
-    unsigned long jpeg_size = 0;
-
-    // Compress YUV to JPEG - tjCompressFromYUV allocates output buffer
-    int ret = tjCompressFromYUV(handle, input->input_buffer, input->width, 1,
-                                input->height, TJSAMP_420, &jpeg_buf,
-                                &jpeg_size, 75, TJFLAG_FASTDCT);
-    if (ret != 0) {
-      fprintf(stderr, "TurboJPEG: Encoding failed: %s\n",
-              tjGetErrorStr2(handle));
-      result = -1;
-      break;
-    }
-
-    // Capture end timestamp
-    output->timings[run].output_timestamp_us = anicet_get_timestamp();
-    ResourceSnapshot frame_end;
-    capture_resources(&frame_end);
-    ResourceDelta frame_delta;
-    compute_delta(&frame_start, &frame_end, &frame_delta);
-    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
-
-    // Store output in vector (only copy buffer if dump_output is true)
-    if (output->dump_output) {
-      output->frame_buffers[run].assign(jpeg_buf, jpeg_buf + jpeg_size);
-    }
-    output->frame_sizes[run] = jpeg_size;
-
-    tjFree(jpeg_buf);
-  }
-
-  // (d) Codec cleanup
-  tjDestroy(handle);
-
-  ResourceSnapshot __profile_mem_end;
-  capture_resources(&__profile_mem_end);
-  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
-
-  // Compute and store resource delta (without printing)
-  compute_delta(&__profile_start_profile_encode_mem, &__profile_mem_end,
-                &output->resource_delta);
-
-  return result;
-}
-
-// libjpeg-turbo encoder (non-optimized) - uses dlopen to avoid symbol
-// conflicts Dynamically loads libturbojpeg-nonopt.so with RTLD_LOCAL for
-// symbol isolation
-int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
-                      CodecOutput* output) {
-  // Validate inputs
-  if (!input || !input->input_buffer || !setup || !output) {
-    return -1;
-  }
-
-  int num_runs = setup->num_runs;
-
-  // Initialize output
-  output->frame_buffers.clear();
-  output->frame_buffers.resize(num_runs);
-  output->frame_sizes.clear();
-  output->frame_sizes.resize(num_runs);
-  output->timings.clear();
-  output->timings.resize(num_runs);
-  output->profile_encode_cpu_ms.clear();
-  output->profile_encode_cpu_ms.resize(num_runs);
-
-  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(profile_encode_mem);
-
-  // (a) Codec setup - Load libturbojpeg-nonopt.so with RTLD_LOCAL to isolate
+  // (a) Codec setup - Load libturbojpeg library with RTLD_LOCAL to isolate
   // symbols
-  void* handle = dlopen("libturbojpeg-nonopt.so", RTLD_NOW | RTLD_LOCAL);
+  void* handle = dlopen(library_name, RTLD_NOW | RTLD_LOCAL);
   if (!handle) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load library: %s\n",
-            dlerror());
+    fprintf(stderr, "libjpeg-turbo: Failed to load library %s: %s\n",
+            library_name, dlerror());
     PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
@@ -155,17 +78,16 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
 
   if (!initCompress || !compressFromYUV || !getErrorStr2 || !tjFreeFunc ||
       !tjDestroyFunc) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to load symbols: %s\n",
-            dlerror());
+    fprintf(stderr, "libjpeg-turbo: Failed to load symbols: %s\n", dlerror());
     dlclose(handle);
     PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
-  // Now use the library exactly like the optimized version
+  // Now use the library
   void* tj_handle = initCompress();
   if (!tj_handle) {
-    fprintf(stderr, "libjpeg-turbo-nonopt: Failed to initialize compressor\n");
+    fprintf(stderr, "libjpeg-turbo: Failed to initialize compressor\n");
     dlclose(handle);
     PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
@@ -184,12 +106,12 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
     unsigned char* jpeg_buf = nullptr;
     unsigned long jpeg_size = 0;
 
-    // TJSAMP_420 = 2, TJFLAG_FASTDCT = 2048 (from turbojpeg.h)
-    int ret =
-        compressFromYUV(tj_handle, input->input_buffer, input->width, 1,
-                        input->height, 2, &jpeg_buf, &jpeg_size, 75, 2048);
+    // Compress YUV to JPEG - tjCompressFromYUV allocates output buffer
+    int ret = compressFromYUV(tj_handle, input->input_buffer, input->width, 1,
+                              input->height, TJSAMP_420, &jpeg_buf, &jpeg_size,
+                              75, TJFLAG_FASTDCT);
     if (ret != 0) {
-      fprintf(stderr, "libjpeg-turbo-nonopt: Encoding failed: %s\n",
+      fprintf(stderr, "libjpeg-turbo: Encoding failed: %s\n",
               getErrorStr2(tj_handle));
       result = -1;
       break;
@@ -197,7 +119,6 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
 
     // Capture end timestamp
     output->timings[run].output_timestamp_us = anicet_get_timestamp();
-
     ResourceSnapshot frame_end;
     capture_resources(&frame_end);
     ResourceDelta frame_delta;
@@ -226,27 +147,6 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
                 &output->resource_delta);
 
   return result;
-}
-
-// Runner - dispatches to opt or nonopt based on setup parameters
-int anicet_run(const CodecInput* input, CodecSetup* setup,
-               CodecOutput* output) {
-  if (!setup) {
-    return -1;
-  }
-
-  // Check for "optimization" parameter, default to "opt"
-  std::string optimization = "opt";
-  auto it = setup->parameter_map.find("optimization");
-  if (it != setup->parameter_map.end()) {
-    optimization = std::get<std::string>(it->second);
-  }
-
-  if (optimization == "nonopt") {
-    return anicet_run_nonopt(input, setup, output);
-  } else {
-    return anicet_run_opt(input, setup, output);
-  }
 }
 
 }  // namespace libjpegturbo

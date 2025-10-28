@@ -243,9 +243,10 @@ if(BUILD_ENCODERS)
     endif()
 
     if(BUILD_LIBJPEG_TURBO)
-        ExternalProject_Add(libjpeg-turbo-lib
+        ExternalProject_Add(libjpeg-turbo-lib-opt
+            PREFIX ${CMAKE_BINARY_DIR}/libjpeg-turbo-lib-prefix-opt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libjpeg-turbo
-            BINARY_DIR ${CMAKE_BINARY_DIR}/libjpeg-turbo-build
+            BINARY_DIR ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-opt
             CMAKE_CACHE_ARGS
                 ${ENCODER_CMAKE_CACHE_ARGS}
             CMAKE_ARGS
@@ -259,6 +260,7 @@ if(BUILD_ENCODERS)
 
         # libjpeg-turbo encoder - non-optimized version (no SIMD) - SHARED LIBRARY
         ExternalProject_Add(libjpeg-turbo-lib-nonopt
+            PREFIX ${CMAKE_BINARY_DIR}/libjpeg-turbo-lib-prefix-nonopt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/libjpeg-turbo
             BINARY_DIR ${CMAKE_BINARY_DIR}/libjpeg-turbo-build-nonopt
             CMAKE_CACHE_ARGS
@@ -442,7 +444,7 @@ if(BUILD_ENCODERS)
         list(APPEND ENCODER_TARGETS jpegli-lib)
     endif()
     if(BUILD_LIBJPEG_TURBO)
-        list(APPEND ENCODER_TARGETS libjpeg-turbo-lib libjpeg-turbo-lib-nonopt)
+        list(APPEND ENCODER_TARGETS libjpeg-turbo-lib-opt libjpeg-turbo-lib-nonopt)
     endif()
     if(BUILD_JXS)
         list(APPEND ENCODER_TARGETS jxs-lib)
