@@ -16,9 +16,10 @@ namespace anicet {
 namespace runner {
 namespace x265 {
 
-// x265 encoder (8-bit) - writes to caller-provided memory buffer only
-int anicet_run_opt(const CodecInput* input, CodecSetup* setup,
-                   CodecOutput* output) {
+// x265 encoder (8-bit) - uses dlopen to load library based on optimization
+// parameter
+int anicet_run(const CodecInput* input, CodecSetup* setup,
+               CodecOutput* output) {
   // Validate inputs
   if (!input || !input->input_buffer || !setup || !output) {
     return -1;
@@ -39,147 +40,20 @@ int anicet_run_opt(const CodecInput* input, CodecSetup* setup,
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
   PROFILE_RESOURCES_START(profile_encode_mem);
 
-  // (a) Codec setup - setup ONCE for all frames
-  x265_param* param = x265_param_alloc();
-  if (!param) {
-    fprintf(stderr, "x265: Failed to allocate parameters\n");
-    PROFILE_RESOURCES_END(profile_encode_mem);
-    return -1;
+  // Determine library name from optimization parameter
+  std::string optimization = "opt";
+  auto opt_it = setup->parameter_map.find("optimization");
+  if (opt_it != setup->parameter_map.end()) {
+    optimization = std::get<std::string>(opt_it->second);
   }
 
-  x265_param_default_preset(param, "medium", "zerolatency");
-  param->sourceWidth = input->width;
-  param->sourceHeight = input->height;
-  param->fpsNum = 30;
-  param->fpsDenom = 1;
-  param->internalCsp = X265_CSP_I420;
-  // Library is compiled for 8-bit
-  param->internalBitDepth = 8;
-  // I-frame only
-  param->keyframeMax = 1;
-  param->bframes = 0;
-  // Set log level based on debug_level (only show messages if debug_level > 1)
-  param->logLevel = (input->debug_level > 1) ? X265_LOG_INFO : X265_LOG_NONE;
+  const char* library_name =
+      (optimization == "nonopt") ? "libx265-8bit-nonopt.so" : "libx265-8bit.so";
 
-  x265_encoder* encoder = x265_encoder_open(param);
-  if (!encoder) {
-    fprintf(stderr, "x265: Failed to open encoder\n");
-    x265_param_free(param);
-    PROFILE_RESOURCES_END(profile_encode_mem);
-    return -1;
-  }
-
-  x265_picture* pic_in = x265_picture_alloc();
-  x265_picture_init(param, pic_in);
-
-  // (b) Input conversion - Set up picture planes for YUV420 (8-bit)
-  pic_in->bitDepth = 8;
-  pic_in->planes[0] = (void*)input->input_buffer;
-  pic_in->planes[1] =
-      (void*)(input->input_buffer + input->width * input->height);
-  pic_in->planes[2] =
-      (void*)(input->input_buffer + input->width * input->height +
-              input->width * input->height / 4);
-  pic_in->stride[0] = input->width;
-  pic_in->stride[1] = input->width / 2;
-  pic_in->stride[2] = input->width / 2;
-
-  // (c) Actual encoding - run num_runs times through same encoder
-  int result = 0;
-
-  for (int run = 0; run < num_runs; run++) {
-    // Capture start timestamp
-    output->timings[run].input_timestamp_us = anicet_get_timestamp();
-    ResourceSnapshot frame_start;
-    capture_resources(&frame_start);
-
-    // Force this frame to be IDR
-    pic_in->sliceType = X265_TYPE_IDR;
-
-    x265_nal* nals = nullptr;
-    uint32_t num_nals = 0;
-    int frame_size =
-        x265_encoder_encode(encoder, &nals, &num_nals, pic_in, nullptr);
-
-    if (frame_size <= 0) {
-      fprintf(stderr, "x265: Encoding failed (run %d)\n", run);
-      result = -1;
-      break;
-    }
-
-    // Capture end timestamp
-    output->timings[run].output_timestamp_us = anicet_get_timestamp();
-    ResourceSnapshot frame_end;
-    capture_resources(&frame_end);
-    ResourceDelta frame_delta;
-    compute_delta(&frame_start, &frame_end, &frame_delta);
-    output->profile_encode_cpu_ms[run] = frame_delta.cpu_time_ms;
-
-    // Calculate total size for this frame
-    size_t total_size = 0;
-    for (uint32_t i = 0; i < num_nals; i++) {
-      total_size += nals[i].sizeBytes;
-    }
-
-    // Copy all NAL units directly to output vector (only if dump_output is
-    // true)
-    if (output->dump_output) {
-      output->frame_buffers[run].resize(total_size);
-      size_t offset = 0;
-      for (uint32_t i = 0; i < num_nals; i++) {
-        memcpy(output->frame_buffers[run].data() + offset, nals[i].payload,
-               nals[i].sizeBytes);
-        offset += nals[i].sizeBytes;
-      }
-    }
-    output->frame_sizes[run] = total_size;
-  }
-
-  // (d) Codec cleanup - cleanup ONCE at the end
-  x265_picture_free(pic_in);
-  x265_encoder_close(encoder);
-  x265_param_free(param);
-
-  ResourceSnapshot __profile_mem_end;
-  capture_resources(&__profile_mem_end);
-  output->profile_encode_mem_kb = __profile_mem_end.rss_peak_kb;
-
-  // Compute and store resource delta (without printing)
-  compute_delta(&__profile_start_profile_encode_mem, &__profile_mem_end,
-                &output->resource_delta);
-
-  return result;
-}
-
-// x265 encoder (8-bit, non-optimized) - uses dlopen to avoid symbol conflicts
-// Dynamically loads libx265-8bit-nonopt.so with RTLD_LOCAL for symbol isolation
-int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
-                      CodecOutput* output) {
-  // Validate inputs
-  if (!input || !input->input_buffer || !setup || !output) {
-    return -1;
-  }
-
-  int num_runs = setup->num_runs;
-
-  // Initialize output
-  output->frame_buffers.clear();
-  output->frame_buffers.resize(num_runs);
-  output->frame_sizes.clear();
-  output->frame_sizes.resize(num_runs);
-  output->timings.clear();
-  output->timings.resize(num_runs);
-  output->profile_encode_cpu_ms.clear();
-  output->profile_encode_cpu_ms.resize(num_runs);
-
-  // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
-  PROFILE_RESOURCES_START(profile_encode_mem);
-
-  // (a) Codec setup - Load libx265-8bit-nonopt.so with RTLD_LOCAL to isolate
-  // symbols
-  void* handle = dlopen("libx265-8bit-nonopt.so", RTLD_NOW | RTLD_LOCAL);
+  // (a) Codec setup - Load x265 library with RTLD_LOCAL to isolate symbols
+  void* handle = dlopen(library_name, RTLD_NOW | RTLD_LOCAL);
   if (!handle) {
-    fprintf(stderr, "x265-8bit-nonopt: Failed to load library: %s\n",
+    fprintf(stderr, "x265: Failed to load library %s: %s\n", library_name,
             dlerror());
     PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
@@ -216,17 +90,16 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
   if (!param_alloc || !param_default_preset || !encoder_open ||
       !picture_alloc || !picture_init || !encoder_encode || !picture_free ||
       !encoder_close || !param_free) {
-    fprintf(stderr, "x265-8bit-nonopt: Failed to load symbols: %s\n",
-            dlerror());
+    fprintf(stderr, "x265: Failed to load symbols: %s\n", dlerror());
     dlclose(handle);
     PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
   }
 
-  // Now use the library exactly like the optimized version
+  // Now use the library
   x265_param* param = param_alloc();
   if (!param) {
-    fprintf(stderr, "x265-8bit-nonopt: Failed to allocate parameters\n");
+    fprintf(stderr, "x265: Failed to allocate parameters\n");
     dlclose(handle);
     PROFILE_RESOURCES_END(profile_encode_mem);
     return -1;
@@ -248,7 +121,7 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
 
   x265_encoder* encoder = encoder_open(param);
   if (!encoder) {
-    fprintf(stderr, "x265-8bit-nonopt: Failed to open encoder\n");
+    fprintf(stderr, "x265: Failed to open encoder\n");
     param_free(param);
     dlclose(handle);
     PROFILE_RESOURCES_END(profile_encode_mem);
@@ -287,7 +160,7 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
     int frame_size = encoder_encode(encoder, &nals, &num_nals, pic_in, nullptr);
 
     if (frame_size <= 0) {
-      fprintf(stderr, "x265-8bit-nonopt: Encoding failed (run %d)\n", run);
+      fprintf(stderr, "x265: Encoding failed (run %d)\n", run);
       result = -1;
       break;
     }
@@ -335,27 +208,6 @@ int anicet_run_nonopt(const CodecInput* input, CodecSetup* setup,
                 &output->resource_delta);
 
   return result;
-}
-
-// Runner - dispatches to opt or nonopt based on setup parameters
-int anicet_run(const CodecInput* input, CodecSetup* setup,
-               CodecOutput* output) {
-  if (!setup) {
-    return -1;
-  }
-
-  // Check for "optimization" parameter, default to "opt"
-  std::string optimization = "opt";
-  auto it = setup->parameter_map.find("optimization");
-  if (it != setup->parameter_map.end()) {
-    optimization = std::get<std::string>(it->second);
-  }
-
-  if (optimization == "nonopt") {
-    return anicet_run_nonopt(input, setup, output);
-  } else {
-    return anicet_run_opt(input, setup, output);
-  }
 }
 
 }  // namespace x265

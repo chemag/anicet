@@ -108,9 +108,10 @@ if(BUILD_ENCODERS)
     endif()
 
     if(BUILD_X265)
-        ExternalProject_Add(x265-8bit-lib
+        ExternalProject_Add(x265-8bit-lib-opt
+            PREFIX ${CMAKE_BINARY_DIR}/x265-8bit-lib-prefix-opt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
-            BINARY_DIR ${CMAKE_BINARY_DIR}/x265-8bit-build
+            BINARY_DIR ${CMAKE_BINARY_DIR}/x265-8bit-build-opt
             # Apply pthread fix patch (idempotent - only applies once)
             PATCH_COMMAND sh ${CMAKE_SOURCE_DIR}/patches/apply-x265-patch.sh
                 ${CMAKE_SOURCE_DIR}/lib/x265/source/.pthread-patched
@@ -143,6 +144,7 @@ if(BUILD_ENCODERS)
 
         # x265 encoder - non-optimized version (no assembly) - SHARED LIBRARY
         ExternalProject_Add(x265-8bit-lib-nonopt
+            PREFIX ${CMAKE_BINARY_DIR}/x265-8bit-lib-prefix-nonopt
             SOURCE_DIR ${CMAKE_SOURCE_DIR}/lib/x265/source
             BINARY_DIR ${CMAKE_BINARY_DIR}/x265-8bit-build-nonopt
             # Apply pthread fix patch (idempotent - only applies once)
@@ -431,7 +433,7 @@ message(STATUS "==============================================")
 if(BUILD_ENCODERS)
     set(ENCODER_TARGETS "")
     if(BUILD_X265)
-        list(APPEND ENCODER_TARGETS x265-lib x265-lib-nonopt)
+        list(APPEND ENCODER_TARGETS x265-8bit-lib-opt x265-8bit-lib-nonopt)
     endif()
     if(BUILD_SVT_AV1)
         list(APPEND ENCODER_TARGETS svt-av1-lib)
