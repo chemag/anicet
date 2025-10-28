@@ -106,7 +106,54 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     return -1;
   }
 
-  param_default_preset(param, "medium", "zerolatency");
+  // Check if preset is specified and validate it
+  auto preset_it = setup->parameter_map.find("preset");
+  if (preset_it != setup->parameter_map.end()) {
+    std::string preset = std::get<std::string>(preset_it->second);
+
+    if (!validate_parameter_list("x265", "preset", preset,
+                                 DEFAULT_CODEC_SETUP_PRESET_VALUES)) {
+      param_free(param);
+      dlclose(handle);
+      PROFILE_RESOURCES_END(profile_encode_mem);
+      return -1;
+    }
+
+    // Check for tune parameter, default to "zerolatency"
+    std::string tune = DEFAULT_CODEC_SETUP_TUNE;
+    auto tune_it = setup->parameter_map.find("tune");
+    if (tune_it != setup->parameter_map.end()) {
+      tune = std::get<std::string>(tune_it->second);
+
+      if (!validate_parameter_list("x265", "tune", tune,
+                                   DEFAULT_CODEC_SETUP_TUNE_VALUES)) {
+        param_free(param);
+        dlclose(handle);
+        PROFILE_RESOURCES_END(profile_encode_mem);
+        return -1;
+      }
+    }
+
+    param_default_preset(param, preset.c_str(), tune.c_str());
+  }
+  // If no preset specified, skip x265_param_default_preset()
+
+  // Check for rate-control parameter and validate it
+  auto rate_control_it = setup->parameter_map.find("rate-control");
+  if (rate_control_it != setup->parameter_map.end()) {
+    std::string rate_control = std::get<std::string>(rate_control_it->second);
+
+    if (!validate_parameter_list("x265", "rate-control", rate_control,
+                                 DEFAULT_CODEC_SETUP_RATE_CONTROL_VALUES)) {
+      param_free(param);
+      dlclose(handle);
+      PROFILE_RESOURCES_END(profile_encode_mem);
+      return -1;
+    }
+    // Note: Actual rate-control configuration not implemented yet
+    // Would need to set param->rc.rateControlMode and related parameters
+  }
+
   param->sourceWidth = input->width;
   param->sourceHeight = input->height;
   param->fpsNum = 30;

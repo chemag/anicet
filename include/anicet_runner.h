@@ -10,6 +10,7 @@
 #include "resource_profiler.h"
 
 #ifdef __cplusplus
+#include <list>
 #include <map>
 #include <string>
 #include <variant>
@@ -85,6 +86,13 @@ struct CodecOutput {
   // Helper method to get number of frames
   size_t num_frames() const { return frame_buffers.size(); }
 };
+
+// Helper function to validate parameter against a list of valid values
+// Returns true if valid, false if invalid (with error message printed)
+bool validate_parameter_list(const std::string& label,
+                             const std::string& param_name,
+                             const std::string& param_value,
+                             const std::list<std::string>& valid_values);
 
 // Individual encoder sub-runners (C++ only)
 // All sub-runners follow the same pattern:

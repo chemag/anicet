@@ -58,6 +58,29 @@ static void append_codec_output(CodecOutput* dest, const CodecOutput& src) {
       src.resource_delta.invol_ctx_switches;
 }
 
+// Helper function to validate parameter against a list of valid values
+bool validate_parameter_list(const std::string& label,
+                             const std::string& param_name,
+                             const std::string& param_value,
+                             const std::list<std::string>& valid_values) {
+  for (const auto& valid : valid_values) {
+    if (param_value == valid) {
+      return true;
+    }
+  }
+
+  // Invalid - print error message with valid options
+  fprintf(stderr, "%s: Invalid %s '%s'. Valid values are: ", label.c_str(),
+          param_name.c_str(), param_value.c_str());
+  bool first = true;
+  for (const auto& valid : valid_values) {
+    fprintf(stderr, "%s%s", first ? "" : ", ", valid.c_str());
+    first = false;
+  }
+  fprintf(stderr, "\n");
+  return false;
+}
+
 // Main experiment function - uses all sub-runners
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
@@ -291,6 +314,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     } else if (run_x265_8bit_nonopt) {
       setup.parameter_map["optimization"] = "nonopt";
     }
+    setup.parameter_map["preset"] = "medium";
+    setup.parameter_map["tune"] = "zerolatency";
+    setup.parameter_map["rate-control"] = "crf";
     if (anicet::runner::x265::anicet_run(&input, &setup, &local_output) == 0 &&
         local_output.num_frames() > 0) {
       // Generate filenames and optionally write files
