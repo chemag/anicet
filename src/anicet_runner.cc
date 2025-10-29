@@ -153,8 +153,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   bool run_libjpeg_turbo = run_all || codec_in_list("libjpeg-turbo");
   bool run_libjpeg_turbo_nonopt = codec_in_list("libjpeg-turbo-nonopt");
   bool run_jpegli = run_all || codec_in_list("jpegli");
-  bool run_x265_8bit = run_all || codec_in_list("x265-8bit");
-  bool run_x265_8bit_nonopt = codec_in_list("x265-8bit-nonopt");
+  bool run_x265 = run_all || codec_in_list("x265");
+  bool run_x265_nonopt = codec_in_list("x265-nonopt");
   bool run_svtav1 = run_all || codec_in_list("svt-av1");
   bool run_mediacodec = run_all || codec_in_list("mediacodec");
 
@@ -296,14 +296,14 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   }
 
   // 4. x265 (H.265/HEVC) 8-bit encoding
-  if (run_x265_8bit || run_x265_8bit_nonopt) {
+  if (run_x265 || run_x265_nonopt) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
-    if (run_x265_8bit) {
+    if (run_x265) {
       setup.parameter_map["optimization"] = "opt";
-    } else if (run_x265_8bit_nonopt) {
+    } else if (run_x265_nonopt) {
       setup.parameter_map["optimization"] = "nonopt";
     }
     setup.parameter_map["preset"] = "medium";
@@ -317,8 +317,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         std::string optimization =
             std::get<std::string>(setup.parameter_map["optimization"]);
         snprintf(filename, sizeof(filename),
-                 "%s/%s.x265-8bit.optimization_%s.index_%zu.265",
-                 dump_output_dir, dump_output_prefix, optimization.c_str(), i);
+                 "%s/%s.x265.optimization_%s.index_%zu.265", dump_output_dir,
+                 dump_output_prefix, optimization.c_str(), i);
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -337,7 +337,7 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
         append_codec_output(output, local_output);
       }
     } else {
-      fprintf(stderr, "x265-8bit: Encoding failed\n");
+      fprintf(stderr, "x265: Encoding failed\n");
       errors++;
     }
   }

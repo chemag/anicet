@@ -124,13 +124,12 @@ int anicet_run_libjpegturbo_nonopt(const CodecInput* input, int num_runs,
 int anicet_run_jpegli(const CodecInput* input, int num_runs,
                       CodecOutput* output);
 
-// x265 encoder (H.265/HEVC) 8-bit - optimized
-int anicet_run_x265_8bit(const CodecInput* input, int num_runs,
-                         CodecOutput* output);
+// x265 encoder (H.265/HEVC) (8-bit) - optimized
+int anicet_run_x265(const CodecInput* input, int num_runs, CodecOutput* output);
 
-// x265 encoder (H.265/HEVC) 8-bit - non-optimized (no assembly)
-int anicet_run_x265_8bit_nonopt(const CodecInput* input, int num_runs,
-                                CodecOutput* output);
+// x265 encoder (H.265/HEVC) (8-bit) - non-optimized (no assembly)
+int anicet_run_x265_nonopt(const CodecInput* input, int num_runs,
+                           CodecOutput* output);
 
 // SVT-AV1 encoder
 int anicet_run_svtav1(const CodecInput* input, int num_runs,

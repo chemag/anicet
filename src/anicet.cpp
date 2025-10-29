@@ -35,6 +35,13 @@
 #include <nlohmann/json.hpp>
 
 
+// Valid codec name(s)
+std::set<std::string> VALID_CODECS = {
+  "x265", "x265-nonopt", "svt-av1", "libjpeg-turbo",
+  "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
+  "mediacodec", "all"
+};
+
 // small utilities
 static long now_ms_monotonic() {
   struct timespec ts{};
@@ -312,7 +319,7 @@ static void print_help(const char* argv0) {
       "  --width N                Image width in pixels\n"
       "  --height N               Image height in pixels\n"
       "  --color-format FORMAT    Color format (e.g., yuv420p)\n"
-      "  --codec CODEC            Codec to use: x265-8bit, x265-8bit-nonopt, svt-av1,\n"
+      "  --codec CODEC            Codec to use: x265, x265-nonopt, svt-av1,\n"
       "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
       "                           webp, webp-nonopt, mediacodec, all (default: all)\n"
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
@@ -460,12 +467,6 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
 
       case 'C': {
         opt.codec = optarg;
-        // Validate codec name(s) - supports comma-separated list
-        std::set<std::string> valid_codecs = {
-          "x265-8bit", "x265-8bit-nonopt", "svt-av1", "libjpeg-turbo",
-          "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
-          "mediacodec", "all"
-        };
         // Split by comma and validate each codec
         std::string codec_list = opt.codec;
         size_t pos = 0;
@@ -482,7 +483,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
           while (end > start && codec_list[end - 1] == ' ') end--;
 
           std::string codec = codec_list.substr(start, end - start);
-          if (valid_codecs.find(codec) == valid_codecs.end()) {
+          if (VALID_CODECS.find(codec) == VALID_CODECS.end()) {
             fprintf(stderr, "Invalid codec: %s\n", codec.c_str());
             all_valid = false;
             break;
