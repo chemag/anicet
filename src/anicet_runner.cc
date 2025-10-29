@@ -3,8 +3,10 @@
 
 #include "anicet_runner.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <string>
 
 // Individual codec runners
@@ -56,6 +58,13 @@ static void append_codec_output(CodecOutput* dest, const CodecOutput& src) {
   dest->resource_delta.vol_ctx_switches += src.resource_delta.vol_ctx_switches;
   dest->resource_delta.invol_ctx_switches +=
       src.resource_delta.invol_ctx_switches;
+  // Copy codec name and params if dest is empty (first codec)
+  if (dest->codec_name.empty() && !src.codec_name.empty()) {
+    dest->codec_name = src.codec_name;
+    dest->codec_params = src.codec_params;
+  }
+  // Note: If mixing multiple codecs (e.g., --codec all), codec_name will be
+  // from the first codec. Individual frames still have correct filenames.
 }
 
 // Helper function to validate parameter against a list of valid values
@@ -81,13 +90,75 @@ bool validate_parameter_list(const std::string& label,
   return false;
 }
 
+// Helper function to convert parameter_map to string map
+static std::map<std::string, std::string> convert_params_to_strings(
+    const CodecSetupParameterMap& parameter_map) {
+  std::map<std::string, std::string> result;
+  for (const auto& [key, value] : parameter_map) {
+    // Convert variant to string
+    if (std::holds_alternative<std::string>(value)) {
+      result[key] = std::get<std::string>(value);
+    } else if (std::holds_alternative<int>(value)) {
+      result[key] = std::to_string(std::get<int>(value));
+    } else if (std::holds_alternative<double>(value)) {
+      result[key] = std::to_string(std::get<double>(value));
+    }
+  }
+  return result;
+}
+
+// Helper function to get parameter ordering from descriptors
+// Returns the order value, or 100 if not found
+static int get_param_order(
+    const std::string& key,
+    const std::map<std::string, anicet::parameter::ParameterDescriptor>&
+        descriptors) {
+  auto it = descriptors.find(key);
+  if (it != descriptors.end()) {
+    return it->second.order;
+  }
+  return 100;  // Default order for parameters not in descriptors
+}
+
+// Comparator for custom parameter ordering using descriptors
+struct ParamComparator {
+  const std::map<std::string, anicet::parameter::ParameterDescriptor>&
+      descriptors;
+
+  ParamComparator(
+      const std::map<std::string, anicet::parameter::ParameterDescriptor>& desc)
+      : descriptors(desc) {}
+
+  bool operator()(const std::pair<std::string, std::string>& a,
+                  const std::pair<std::string, std::string>& b) const {
+    int order_a = get_param_order(a.first, descriptors);
+    int order_b = get_param_order(b.first, descriptors);
+
+    if (order_a != order_b) {
+      return order_a < order_b;
+    }
+    // For parameters with same order, sort alphabetically
+    return a.first < b.first;
+  }
+};
+
+// Helper function to populate codec name and parameters in CodecOutput
+static void populate_codec_info(CodecOutput& output,
+                                const std::string& codec_name,
+                                const CodecSetup& setup) {
+  output.codec_name = codec_name;
+  output.codec_params = convert_params_to_strings(setup.parameter_map);
+}
+
 // Main experiment function - uses all sub-runners
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
                       const char* codec_name, int num_runs, bool dump_output,
                       const char* dump_output_dir,
                       const char* dump_output_prefix, int debug_level,
-                      CodecOutput* output) {
+                      CodecOutput* output, CodecSetup* codec_setup) {
+  // Local DEBUG macro for cleaner debug statements
+#define DEBUG(level, ...) ANICET_DEBUG(debug_level, level, __VA_ARGS__)
   // Validate inputs
   if (!buffer || buf_size == 0 || height <= 0 || width <= 0 || !color_format ||
       !codec_name) {
@@ -154,7 +225,6 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   bool run_libjpeg_turbo_nonopt = codec_in_list("libjpeg-turbo-nonopt");
   bool run_jpegli = run_all || codec_in_list("jpegli");
   bool run_x265 = run_all || codec_in_list("x265");
-  bool run_x265_nonopt = codec_in_list("x265-nonopt");
   bool run_svtav1 = run_all || codec_in_list("svt-av1");
   bool run_mediacodec = run_all || codec_in_list("mediacodec");
 
@@ -182,6 +252,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     }
     if (anicet::runner::webp::anicet_run(&input, &setup, &local_output) == 0 &&
         local_output.num_frames() > 0) {
+      // Store codec name and parameters in output
+      populate_codec_info(local_output, "webp", setup);
+
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
@@ -227,6 +300,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     if (anicet::runner::libjpegturbo::anicet_run(&input, &setup,
                                                  &local_output) == 0 &&
         local_output.num_frames() > 0) {
+      // Store codec name and parameters in output
+      populate_codec_info(local_output, "libjpeg-turbo", setup);
+
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
@@ -267,6 +343,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     if (anicet::runner::jpegli::anicet_run(&input, &setup, &local_output) ==
             0 &&
         local_output.num_frames() > 0) {
+      // Store codec name and parameters in output
+      populate_codec_info(local_output, "jpegli", setup);
+
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
@@ -296,29 +375,64 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   }
 
   // 4. x265 (H.265/HEVC) 8-bit encoding
-  if (run_x265 || run_x265_nonopt) {
+  if (run_x265) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
+
+    // Use provided setup or create default one
     CodecSetup setup;
-    setup.num_runs = num_runs;
-    if (run_x265) {
+    if (codec_setup != nullptr) {
+      // Use the provided setup
+      setup = *codec_setup;
+      // Override num_runs if not already set
+      if (setup.num_runs == 0) {
+        setup.num_runs = num_runs;
+      }
+      // Ensure "optimization" is always set (needed for filename generation)
+      if (setup.parameter_map.find("optimization") ==
+          setup.parameter_map.end()) {
+        setup.parameter_map["optimization"] = "opt";  // default
+      }
+    } else {
+      // Create default setup
+      setup.num_runs = num_runs;
       setup.parameter_map["optimization"] = "opt";
-    } else if (run_x265_nonopt) {
-      setup.parameter_map["optimization"] = "nonopt";
+      setup.parameter_map["preset"] = "medium";
+      setup.parameter_map["tune"] = "zerolatency";
+      setup.parameter_map["rate-control"] = "crf";
     }
-    setup.parameter_map["preset"] = "medium";
-    setup.parameter_map["tune"] = "zerolatency";
-    setup.parameter_map["rate-control"] = "crf";
+
     if (anicet::runner::x265::anicet_run(&input, &setup, &local_output) == 0 &&
         local_output.num_frames() > 0) {
+      // Store codec name and parameters in output
+      populate_codec_info(local_output, "x265", setup);
+
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
-        std::string optimization =
-            std::get<std::string>(setup.parameter_map["optimization"]);
-        snprintf(filename, sizeof(filename),
-                 "%s/%s.x265.optimization_%s.index_%zu.265", dump_output_dir,
-                 dump_output_prefix, optimization.c_str(), i);
+        char filename[1024];
+
+        // Build filename with all parameters using the shared helper
+        std::stringstream ss;
+        ss << dump_output_dir << "/" << dump_output_prefix;
+        ss << ".codec_x265";
+
+        // Convert parameters to string map
+        std::map<std::string, std::string> params =
+            convert_params_to_strings(setup.parameter_map);
+
+        // Convert to vector and sort with custom ordering from descriptors
+        std::vector<std::pair<std::string, std::string>> sorted_params(
+            params.begin(), params.end());
+        std::sort(sorted_params.begin(), sorted_params.end(),
+                  ParamComparator(anicet::runner::x265::X265_PARAMETERS));
+
+        for (const auto& [key, value] : sorted_params) {
+          ss << "." << key << "_" << value;
+        }
+
+        ss << ".index_" << i << ".265";
+
+        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
@@ -351,6 +465,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     if (anicet::runner::svtav1::anicet_run(&input, &setup, &local_output) ==
             0 &&
         local_output.num_frames() > 0) {
+      // Store codec name and parameters in output
+      populate_codec_info(local_output, "svt-av1", setup);
+
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
@@ -390,6 +507,9 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     if (anicet::runner::mediacodec::anicet_run(&input, &setup, &local_output) ==
             0 &&
         local_output.num_frames() > 0) {
+      // Store codec name and parameters in output
+      populate_codec_info(local_output, "mediacodec", setup);
+
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
         char filename[512];
@@ -420,5 +540,6 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 #endif
   }
 
+#undef DEBUG
   return errors;
 }

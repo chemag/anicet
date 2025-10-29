@@ -25,6 +25,12 @@
 // Encoder experiment runner
 #include "anicet_runner.h"
 
+// Parameter descriptor system
+#include "anicet_parameter.h"
+
+// Codec-specific runners
+#include "anicet_runner_x265.h"
+
 // Android MediaCodec library for binder cleanup
 #include "android_mediacodec_lib.h"
 
@@ -37,7 +43,7 @@
 
 // Valid codec name(s)
 std::set<std::string> VALID_CODECS = {
-  "x265", "x265-nonopt", "svt-av1", "libjpeg-turbo",
+  "x265", "svt-av1", "libjpeg-turbo",
   "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
   "mediacodec", "all"
 };
@@ -257,6 +263,40 @@ static std::string get_device_serial() {
   return "unknown";
 }
 
+// Helper to get parameter order for sorting
+static int get_param_order(
+    const std::string& param_name, const std::string& codec_name) {
+  if (codec_name == "x265") {
+    auto it = anicet::runner::x265::X265_PARAMETERS.find(param_name);
+    if (it != anicet::runner::x265::X265_PARAMETERS.end()) {
+      return it->second.order;
+    }
+  }
+  // Default order for unknown parameters
+  return 100;
+}
+
+// Get sorted parameters for consistent output ordering
+static std::vector<std::pair<std::string, std::string>> get_sorted_params(
+    const std::map<std::string, std::string>& params,
+    const std::string& codec_name) {
+  std::vector<std::pair<std::string, std::string>> sorted_params(
+      params.begin(), params.end());
+
+  std::sort(sorted_params.begin(), sorted_params.end(),
+            [&codec_name](const std::pair<std::string, std::string>& a,
+                         const std::pair<std::string, std::string>& b) {
+              int order_a = get_param_order(a.first, codec_name);
+              int order_b = get_param_order(b.first, codec_name);
+              if (order_a != order_b) {
+                return order_a < order_b;
+              }
+              return a.first < b.first;  // Alphabetical for same order
+            });
+
+  return sorted_params;
+}
+
 // Default debug level
 #define DEFAULT_DEBUG_LEVEL 0
 
@@ -297,6 +337,10 @@ struct Options {
   std::string output_file = "-";
   // device serial number (populated automatically)
   std::string serial_number;
+  // x265 parameters from CLI (accumulated from multiple --x265 flags)
+  std::vector<std::string> x265_params;
+  // parsed codec setup (populated after CLI parsing)
+  CodecSetup codec_setup;
 };
 
 static void print_help(const char* argv0) {
@@ -319,9 +363,12 @@ static void print_help(const char* argv0) {
       "  --width N                Image width in pixels\n"
       "  --height N               Image height in pixels\n"
       "  --color-format FORMAT    Color format (e.g., yuv420p)\n"
-      "  --codec CODEC            Codec to use: x265, x265-nonopt, svt-av1,\n"
+      "  --codec CODEC            Codec to use: x265, svt-av1,\n"
       "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
       "                           webp, webp-nonopt, mediacodec, all (default: all)\n"
+      "  --x265 PARAMS            x265 encoder parameters (repeatable, colon/comma-separated)\n"
+      "                           Format: param=value:param=value or param=value,param=value\n"
+      "                           Use '--x265 help' for parameter list\n"
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
       "  --dump-output            Write output files to disk (default: disabled)\n"
       "  --no-dump-output         Do not write output files to disk\n"
@@ -355,6 +402,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     {"height", required_argument, nullptr, 'H'},
     {"color-format", required_argument, nullptr, 'f'},
     {"codec", required_argument, nullptr, 'C'},
+    {"x265", required_argument, nullptr, 1000},
     {"num-runs", required_argument, nullptr, 'N'},
     {"dump-output", no_argument, nullptr, 'D'},
     {"no-dump-output", no_argument, nullptr, 'O'},
@@ -496,6 +544,31 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
         break;
       }
 
+      case 1000: {
+        // Handle --x265 option
+        std::string arg(optarg);
+
+        // Check for help requests
+        if (arg == "help" || arg == "help -q" || arg == "help -v") {
+          using namespace anicet::parameter;
+          HelpVerbosity verbosity = HelpVerbosity::CONCISE;
+
+          if (arg == "help -q") {
+            verbosity = HelpVerbosity::COMPACT;
+          } else if (arg == "help -v") {
+            verbosity = HelpVerbosity::VERBOSE;
+          }
+
+          print_parameter_help("x265", anicet::runner::x265::X265_PARAMETERS,
+                              verbosity);
+          exit(0);
+        }
+
+        // Accumulate parameter string for later parsing
+        opt.x265_params.push_back(arg);
+        break;
+      }
+
       case 'N':
         opt.num_runs = atoi(optarg);
         if (opt.num_runs < 1) {
@@ -538,6 +611,27 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
 
       default:
         return false;
+    }
+  }
+
+  // Parse x265 parameters if provided (do this BEFORE command validation)
+  if (!opt.x265_params.empty()) {
+    // Initialize codec_setup with default values from descriptors
+    opt.codec_setup.num_runs = opt.num_runs;  // Will be overridden by CLI if specified
+
+    // Parse each parameter string (defaults will be applied only for explicitly set parameters)
+    for (const auto& param_str : opt.x265_params) {
+      if (!anicet::parameter::parse_parameter_string(
+              "x265", param_str, anicet::runner::x265::X265_PARAMETERS,
+              &opt.codec_setup)) {
+        return false;
+      }
+    }
+
+    // Validate parameter dependencies
+    if (!anicet::parameter::validate_parameter_dependencies(
+            "x265", anicet::runner::x265::X265_PARAMETERS, opt.codec_setup)) {
+      return false;
     }
   }
 
@@ -663,7 +757,8 @@ int main(int argc, char** argv) {
         opt.dump_output_dir.c_str(),
         opt.dump_output_prefix.c_str(),
         opt.debug,
-        &codec_output
+        &codec_output,
+        opt.x265_params.empty() ? nullptr : &opt.codec_setup
     );
 
     // Print simple debug output to stdout if debug level >= 1
@@ -679,24 +774,14 @@ int main(int argc, char** argv) {
         if (opt.dump_output && i < codec_output.output_files.size()) {
           printf("  file: %s\n", codec_output.output_files[i].c_str());
         }
-        // Extract codec name from filename if available, otherwise use full list
-        std::string codec_name = opt.codec;
-        if (i < codec_output.output_files.size()) {
-          std::string filename = codec_output.output_files[i];
-          // Find the codec name in pattern: <prefix>.<codec>.index_<n>...
-          size_t prefix_end = filename.find(opt.dump_output_prefix);
-          if (prefix_end != std::string::npos) {
-            prefix_end += opt.dump_output_prefix.length();
-            if (prefix_end < filename.length() && filename[prefix_end] == '.') {
-              prefix_end++; // Skip the dot after prefix
-              size_t codec_end = filename.find(".index_", prefix_end);
-              if (codec_end != std::string::npos) {
-                codec_name = filename.substr(prefix_end, codec_end - prefix_end);
-              }
-            }
-          }
+        // Use codec name and parameters from CodecOutput
+        printf("  codec: %s\n", codec_output.codec_name.c_str());
+        // Print parameters in custom order for consistency
+        auto sorted_params = get_sorted_params(codec_output.codec_params,
+                                               codec_output.codec_name);
+        for (const auto& [key, value] : sorted_params) {
+          printf("  %s: %s\n", key.c_str(), value.c_str());
         }
-        printf("  codec: %s\n", codec_name.c_str());
         if (i < codec_output.frame_sizes.size()) {
           printf("  size_bytes: %zu\n", codec_output.frame_sizes[i]);
         }
@@ -734,20 +819,29 @@ int main(int argc, char** argv) {
 
     // Setup section
     output_json["setup"]["serial_number"] = opt.serial_number;
-    output_json["setup"]["codec"] = opt.codec;
     output_json["setup"]["num_runs"] = opt.num_runs;
     // Add device and other tags to setup section if present
     for (const auto& kv : opt.tags) {
       output_json["setup"][kv.first] = kv.second;
     }
 
-    // Output section - frames array with exit_code and size_bytes per frame
+    // Output section - frames array with codec, params, exit_code and size_bytes per frame
     output_json["output"]["frames"] = json::array();
     for (size_t i = 0; i < codec_output.num_frames(); i++) {
       json output_frame;
       if (opt.dump_output && i < codec_output.output_files.size()) {
         output_frame["file"] = codec_output.output_files[i];
       }
+
+      // Use codec name and parameters from CodecOutput
+      output_frame["codec"] = codec_output.codec_name;
+      // Add parameters to frame in custom order
+      auto sorted_params = get_sorted_params(codec_output.codec_params,
+                                             codec_output.codec_name);
+      for (const auto& [key, value] : sorted_params) {
+        output_frame[key] = value;
+      }
+
       output_frame["exit_code"] = result;
       if (i < codec_output.frame_sizes.size()) {
         output_frame["size_bytes"] = codec_output.frame_sizes[i];

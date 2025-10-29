@@ -14,7 +14,7 @@ namespace runner {
 namespace mediacodec {
 
 // Global debug level (set in encode function)
-static int g_debug_level = 0;
+static int g_debug_level __attribute__((unused)) = 0;
 
 // Use unified DEBUG macro from anicet_common.h
 #define DEBUG(level, ...) ANICET_DEBUG(g_debug_level, level, __VA_ARGS__)
@@ -28,7 +28,7 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     return -1;
   }
 
-  int num_runs = setup->num_runs;
+  int num_runs __attribute__((unused)) = setup->num_runs;
 
   // Extract codec_name from parameter_map
   auto it = setup->parameter_map.find("codec_name");
@@ -36,7 +36,8 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     fprintf(stderr, "MediaCodec: codec_name parameter not found in setup\n");
     return -1;
   }
-  const char* codec_name = std::get<std::string>(it->second).c_str();
+  const char* codec_name __attribute__((unused)) =
+      std::get<std::string>(it->second).c_str();
 
 #ifdef __ANDROID__
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)

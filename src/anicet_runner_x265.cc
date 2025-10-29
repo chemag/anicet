@@ -20,6 +20,8 @@ namespace x265 {
 // parameter
 int anicet_run(const CodecInput* input, CodecSetup* setup,
                CodecOutput* output) {
+// Local DEBUG macro for cleaner debug statements
+#define DEBUG(level, ...) ANICET_DEBUG(input->debug_level, level, __VA_ARGS__)
   // Validate inputs
   if (!input || !input->input_buffer || !setup || !output) {
     return -1;
@@ -50,6 +52,9 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   const char* library_name = (optimization == "nonopt")
                                  ? "libx265-8bit-nonopt.so"
                                  : "libx265-8bit-opt.so";
+
+  DEBUG(2, "x265: Loading library %s (optimization=%s)", library_name,
+        optimization.c_str());
 
   // (a) Codec setup - Load x265 library with RTLD_LOCAL to isolate symbols
   void* handle = dlopen(library_name, RTLD_NOW | RTLD_LOCAL);
@@ -106,10 +111,14 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     return -1;
   }
 
+  // Determine preset and tune (use defaults if not specified)
+  std::string preset = DEFAULT_CODEC_SETUP_PRESET;  // "medium"
+  std::string tune = DEFAULT_CODEC_SETUP_TUNE;      // "zerolatency"
+
   // Check if preset is specified and validate it
   auto preset_it = setup->parameter_map.find("preset");
   if (preset_it != setup->parameter_map.end()) {
-    std::string preset = std::get<std::string>(preset_it->second);
+    preset = std::get<std::string>(preset_it->second);
 
     if (!validate_parameter_list("x265", "preset", preset,
                                  DEFAULT_CODEC_SETUP_PRESET_VALUES)) {
@@ -118,30 +127,51 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
       PROFILE_RESOURCES_END(profile_encode_mem);
       return -1;
     }
-
-    // Check for tune parameter, default to "zerolatency"
-    std::string tune = DEFAULT_CODEC_SETUP_TUNE;
-    auto tune_it = setup->parameter_map.find("tune");
-    if (tune_it != setup->parameter_map.end()) {
-      tune = std::get<std::string>(tune_it->second);
-
-      if (!validate_parameter_list("x265", "tune", tune,
-                                   DEFAULT_CODEC_SETUP_TUNE_VALUES)) {
-        param_free(param);
-        dlclose(handle);
-        PROFILE_RESOURCES_END(profile_encode_mem);
-        return -1;
-      }
-    }
-
-    param_default_preset(param, preset.c_str(), tune.c_str());
+  } else {
+    // Set default preset in parameter_map so it gets reported
+    setup->parameter_map["preset"] = preset;
   }
-  // If no preset specified, skip x265_param_default_preset()
 
-  // Check for rate-control parameter and validate it
+  // Check for tune parameter override
+  auto tune_it = setup->parameter_map.find("tune");
+  if (tune_it != setup->parameter_map.end()) {
+    tune = std::get<std::string>(tune_it->second);
+
+    if (!validate_parameter_list("x265", "tune", tune,
+                                 DEFAULT_CODEC_SETUP_TUNE_VALUES)) {
+      param_free(param);
+      dlclose(handle);
+      PROFILE_RESOURCES_END(profile_encode_mem);
+      return -1;
+    }
+  } else {
+    // Set default tune in parameter_map so it gets reported
+    setup->parameter_map["tune"] = tune;
+  }
+
+  // ALWAYS call param_default_preset to initialize the param structure properly
+  DEBUG(2, "x265: Applying preset '%s' with tune '%s'", preset.c_str(),
+        tune.c_str());
+  int preset_ret = param_default_preset(param, preset.c_str(), tune.c_str());
+  if (preset_ret < 0) {
+    fprintf(
+        stderr,
+        "x265: Failed to apply preset '%s' with tune '%s' (error code %d)\n",
+        preset.c_str(), tune.c_str(), preset_ret);
+    param_free(param);
+    dlclose(handle);
+    PROFILE_RESOURCES_END(profile_encode_mem);
+    return -1;
+  }
+  DEBUG(2, "x265: Successfully applied preset");
+
+  // Check for rate-control parameter and configure it
   auto rate_control_it = setup->parameter_map.find("rate-control");
+  std::string rate_control =
+      DEFAULT_CODEC_SETUP_RATE_CONTROL;  // default: "crf"
+
   if (rate_control_it != setup->parameter_map.end()) {
-    std::string rate_control = std::get<std::string>(rate_control_it->second);
+    rate_control = std::get<std::string>(rate_control_it->second);
 
     if (!validate_parameter_list("x265", "rate-control", rate_control,
                                  DEFAULT_CODEC_SETUP_RATE_CONTROL_VALUES)) {
@@ -150,8 +180,67 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
       PROFILE_RESOURCES_END(profile_encode_mem);
       return -1;
     }
-    // Note: Actual rate-control configuration not implemented yet
-    // Would need to set param->rc.rateControlMode and related parameters
+  } else {
+    // Set default rate-control in parameter_map so it gets reported
+    setup->parameter_map["rate-control"] = rate_control;
+  }
+
+  // Configure rate control mode and associated parameters
+  if (rate_control == "crf") {
+    param->rc.rateControlMode = X265_RC_CRF;
+    // Check for crf parameter
+    auto crf_it = setup->parameter_map.find("crf");
+    if (crf_it != setup->parameter_map.end()) {
+      param->rc.rfConstant = std::get<int>(crf_it->second);
+    } else {
+      // Store the default value (from x265_param_default: 28) in parameter_map
+      setup->parameter_map["crf"] = static_cast<int>(param->rc.rfConstant);
+    }
+    DEBUG(2, "x265: Using CRF mode with crf=%d",
+          static_cast<int>(param->rc.rfConstant));
+  } else if (rate_control == "cqp") {
+    param->rc.rateControlMode = X265_RC_CQP;
+    // Check for qp parameter
+    auto qp_it = setup->parameter_map.find("qp");
+    if (qp_it != setup->parameter_map.end()) {
+      param->rc.qp = std::get<int>(qp_it->second);
+    } else {
+      // Store the default value (from x265_param_default: 32) in parameter_map
+      setup->parameter_map["qp"] = static_cast<int>(param->rc.qp);
+    }
+    DEBUG(2, "x265: Using CQP mode with qp=%d", static_cast<int>(param->rc.qp));
+  } else if (rate_control == "abr" || rate_control == "cbr") {
+    param->rc.rateControlMode = X265_RC_ABR;
+    // Check for bitrate parameter
+    auto bitrate_it = setup->parameter_map.find("bitrate");
+    if (bitrate_it != setup->parameter_map.end()) {
+      param->rc.bitrate = std::get<int>(bitrate_it->second);
+    } else if (param->rc.bitrate == 0) {
+      // If no bitrate set, we need one for ABR/CBR
+      fprintf(stderr, "x265: bitrate parameter required for %s mode\n",
+              rate_control.c_str());
+      param_free(param);
+      dlclose(handle);
+      PROFILE_RESOURCES_END(profile_encode_mem);
+      return -1;
+    }
+    // Store the bitrate value in parameter_map
+    setup->parameter_map["bitrate"] = static_cast<int>(param->rc.bitrate);
+
+    // For CBR, also enable VBV with tight constraints
+    if (rate_control == "cbr") {
+      param->rc.vbvBufferSize = param->rc.bitrate;
+      param->rc.vbvMaxBitrate = param->rc.bitrate;
+    }
+    DEBUG(2, "x265: Using %s mode with bitrate=%d", rate_control.c_str(),
+          static_cast<int>(param->rc.bitrate));
+  } else if (rate_control == "2-pass") {
+    // 2-pass requires separate encode passes with stats file
+    // For now, just use CRF as fallback
+    fprintf(stderr, "x265: 2-pass encoding not yet supported, using CRF\n");
+    param->rc.rateControlMode = X265_RC_CRF;
+    setup->parameter_map["rate-control"] = std::string("crf");
+    setup->parameter_map["crf"] = static_cast<int>(param->rc.rfConstant);
   }
 
   param->sourceWidth = input->width;
@@ -167,6 +256,12 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   // Set log level based on debug_level (only show messages if debug_level > 1)
   param->logLevel = (input->debug_level > 1) ? X265_LOG_INFO : X265_LOG_NONE;
 
+  DEBUG(2,
+        "x265: Opening encoder (width=%d, height=%d, csp=I420, "
+        "keyframeMax=%d, bframes=%d)",
+        param->sourceWidth, param->sourceHeight, param->keyframeMax,
+        param->bframes);
+
   x265_encoder* encoder = encoder_open(param);
   if (!encoder) {
     fprintf(stderr, "x265: Failed to open encoder\n");
@@ -176,8 +271,12 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     return -1;
   }
 
+  DEBUG(2, "x265: Encoder opened successfully");
+  DEBUG(2, "x265: Allocating picture");
   x265_picture* pic_in = picture_alloc();
+  DEBUG(2, "x265: Initializing picture");
   picture_init(param, pic_in);
+  DEBUG(2, "x265: Picture initialized");
 
   // (b) Input conversion - Set up picture planes for YUV420 (8-bit)
   pic_in->bitDepth = 8;
@@ -194,7 +293,11 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   // (c) Actual encoding - run num_runs times through same encoder
   int result = 0;
 
+  DEBUG(2, "x265: Starting encoding loop (num_runs=%d)", num_runs);
+
   for (int run = 0; run < num_runs; run++) {
+    DEBUG(2, "x265: Encoding run %d/%d", run + 1, num_runs);
+
     // Capture start timestamp
     output->timings[run].input_timestamp_us = anicet_get_timestamp();
     ResourceSnapshot frame_start;
@@ -239,7 +342,11 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
       }
     }
     output->frame_sizes[run] = total_size;
+    DEBUG(2, "x265: Run %d complete (output size=%zu bytes)", run + 1,
+          total_size);
   }
+
+  DEBUG(2, "x265: All encoding runs complete, cleaning up");
 
   // (d) Codec cleanup - cleanup ONCE at the end
   picture_free(pic_in);
@@ -255,6 +362,7 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   compute_delta(&__profile_start_profile_encode_mem, &__profile_mem_end,
                 &output->resource_delta);
 
+#undef DEBUG
   return result;
 }
 

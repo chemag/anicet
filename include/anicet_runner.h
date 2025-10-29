@@ -83,6 +83,10 @@ struct CodecOutput {
   // Detailed resource usage delta for the encoding operation
   ResourceDelta resource_delta;
 
+  // Codec name and parameters used for this encoding
+  std::string codec_name;
+  std::map<std::string, std::string> codec_params;
+
   // Helper method to get number of frames
   size_t num_frames() const { return frame_buffers.size(); }
 };
@@ -149,8 +153,7 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
 //   height:             Image height in pixels
 //   width:              Image width in pixels
 //   color_format:       Color format string (currently only "yuv420p"
-//   supported) codec_name:         Codec to use: "x265", "x265-nonopt",
-//   "svt-av1",
+//   supported) codec_name:         Codec to use: "x265", "svt-av1",
 //                       "libjpeg-turbo", "libjpeg-turbo-nonopt", "jpegli",
 //                       "webp", "mediacodec", "all" (default: all encoders)
 //   num_runs:           Number of times to encode the same frame
@@ -162,6 +165,8 @@ int anicet_run_mediacodec(const CodecInput* input, const char* codec_name,
 //   verbose)
 //   output:             Optional output structure to receive encoding results
 //                       (can be nullptr if not needed)
+//   codec_setup:        Optional codec setup with parameters
+//                       (can be nullptr to use defaults)
 //
 // Returns:
 //   Number of encoding errors (0 = all succeeded)
@@ -170,7 +175,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       const char* codec_name, int num_runs, bool dump_output,
                       const char* dump_output_dir,
                       const char* dump_output_prefix, int debug_level,
-                      CodecOutput* output = nullptr);
+                      CodecOutput* output = nullptr,
+                      CodecSetup* codec_setup = nullptr);
 
 #endif  // __cplusplus
 

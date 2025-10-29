@@ -37,6 +37,7 @@ endif()
 add_executable(anicet
     anicet.cpp
     anicet_runner.cc
+    anicet_parameter.cc
     anicet_runner_webp.cc
     anicet_runner_libjpegturbo.cc
     anicet_runner_jpegli.cc
@@ -81,6 +82,7 @@ if(ANDROID)
     target_link_libraries(anicet PRIVATE
         android_mediacodec_lib
         dl  # Required for dlopen/dlsym/dlclose
+        c++_shared  # Explicitly use shared libc++ to avoid runtime linking issues
     )
 else()
     # Add pthread and other system libraries (not needed on Android)
@@ -90,8 +92,9 @@ endif()
 # Linker flags for anicet
 if(ANICET_STATIC)
     if(ANDROID)
-        # Android: cannot use -static because we need dynamic mediandk
-        target_link_options(anicet PRIVATE -static-libgcc -static-libstdc++)
+        # Android: use dynamic libstdc++ to avoid runtime linking issues with exceptions
+        # Only statically link libgcc
+        target_link_options(anicet PRIVATE -static-libgcc)
     else()
         # Host: link standard libraries statically where possible
         target_link_options(anicet PRIVATE -static-libgcc -static-libstdc++)
@@ -133,11 +136,13 @@ if(ANDROID)
     # Link against the MediaCodec library
     target_link_libraries(android_mediacodec
         android_mediacodec_lib
+        c++_shared  # Explicitly use shared libc++ to avoid runtime linking issues
     )
 
     if(ANICET_STATIC)
-        # Static link C++ stdlib, but mediandk must be dynamic
-        target_link_options(android_mediacodec PRIVATE -static-libgcc -static-libstdc++)
+        # Use dynamic libstdc++ to avoid runtime linking issues with exceptions
+        # Only statically link libgcc
+        target_link_options(android_mediacodec PRIVATE -static-libgcc)
     endif()
 
     if(ANICET_STRIP)
