@@ -21,6 +21,7 @@
 #endif
 
 #include "anicet_common.h"
+#include "anicet_runner_mediacodec.h"
 #include "resource_profiler.h"
 
 #define DEFAULT_QUALITY 80
@@ -147,7 +148,7 @@ int android_mediacodec_get_debug_level(void) { return g_debug_level; }
 void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
                                    int width, int height,
                                    const char* color_format, int* bitrate,
-                                   int quality) {
+                                   int quality, int bitrate_mode) {
   std::string color_format_str(color_format);
   int32_t color_fmt = get_color_format(color_format_str);
   // Set basic parameters
@@ -164,13 +165,13 @@ void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
   AMediaFormat_setInt32(format, "color-format", color_fmt);
   DEBUG(3, "AMediaFormat_setInt32(format, \"color-format\", %d);", color_fmt);
 
-  // TODO(chema): reconsider this
-  int frame_rate = 30;
+  // Frame rate is hardcoded (not exposed as CLI parameter)
+  int frame_rate = MEDIACODEC_FRAME_RATE;
   AMediaFormat_setInt32(format, "frame-rate", frame_rate);
   DEBUG(3, "AMediaFormat_setInt32(format, \"frame-rate\", %d);", frame_rate);
 
-  // set the key frame interval (GoP) to all-key frames
-  int i_frame_interval = 0;
+  // i-frame interval is hardcoded (not exposed as CLI parameter)
+  int i_frame_interval = MEDIACODEC_I_FRAME_INTERVAL;
   AMediaFormat_setInt32(format, "i-frame-interval", i_frame_interval);
   DEBUG(3, "AMediaFormat_setInt32(format, \"i-frame-interval\", %d);",
         i_frame_interval);
@@ -183,13 +184,13 @@ void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
   AMediaFormat_setInt32(format, "bitrate", *bitrate);
   DEBUG(3, "AMediaFormat_setInt32(format, \"bitrate\", %d);", *bitrate);
 
-  // set bitrate mode (0=CQ, 1=VBR, 2=CBR)
-  int bitrate_mode = 1;
+  // set bitrate mode (0=CQ, 1=VBR, 2=CBR) - now passed as parameter
   AMediaFormat_setInt32(format, "bitrate-mode", bitrate_mode);
   DEBUG(3, "AMediaFormat_setInt32(format, \"bitrate-mode\", %i);",
         bitrate_mode);
 
-  int max_b_frames = 0;
+  // max-bframes is hardcoded (not exposed as CLI parameter)
+  int max_b_frames = MEDIACODEC_MAX_BFRAMES;
   AMediaFormat_setInt32(format, "max-bframes", max_b_frames);
   DEBUG(3, "AMediaFormat_setInt32(format, \"max-bframes\", %d);", max_b_frames);
 }
@@ -245,8 +246,8 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
   // Make local copy since function may modify
   int bitrate_local = fmt->bitrate;
   android_mediacodec_set_format(format, mime_type, fmt->width, fmt->height,
-                                fmt->color_format, &bitrate_local,
-                                fmt->quality);
+                                fmt->color_format, &bitrate_local, fmt->quality,
+                                fmt->bitrate_mode);
   DEBUG(2, "Encoding with: %s", fmt->codec_name);
   DEBUG(2, "MIME type: %s", mime_type);
   DEBUG(2, "resolution: %dx%d bitrate: %d", fmt->width, fmt->height,
@@ -274,6 +275,13 @@ int android_mediacodec_encode_setup(const MediaCodecFormat* fmt,
   if (!codec) {
     fprintf(stderr, "Error: Cannot create codec after %d attempts: %s\n",
             max_retries, fmt->codec_name);
+    fprintf(stderr, "Possible reasons:\n");
+    fprintf(stderr,
+            "  - Codec name is invalid or not available on this device\n");
+    fprintf(stderr, "  - Codec does not support the requested format\n");
+    fprintf(stderr, "To list available codecs on device, run:\n");
+    fprintf(stderr,
+            "  adb shell dumpsys media.player | grep -A 1 'Encoder:'\n");
     AMediaFormat_delete(format);
     return 1;
   }
@@ -608,6 +616,49 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
   return result;
 }
 
+// List available encoder codec names
+std::vector<std::string> android_mediacodec_list_encoders(bool image_only) {
+  std::vector<std::string> encoders;
+
+  // Run dumpsys media.player to get codec list
+  FILE* pipe = popen("/system/bin/dumpsys media.player 2>/dev/null", "r");
+  if (!pipe) {
+    return encoders;  // Return empty vector on error
+  }
+
+  char buffer[1024];
+  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+    std::string line(buffer);
+
+    // Look for encoder lines: '  Encoder "codec.name" supports'
+    if (line.find("Encoder \"") != std::string::npos) {
+      size_t start = line.find("\"");
+      size_t end = line.find("\"", start + 1);
+      if (start != std::string::npos && end != std::string::npos) {
+        std::string codec_name = line.substr(start + 1, end - start - 1);
+
+        // Filter for image codecs if requested
+        if (image_only) {
+          // Include HEVC, HEIC, AVC, H264, VP9, AV1 codecs
+          if (codec_name.find("hevc") != std::string::npos ||
+              codec_name.find("heic") != std::string::npos ||
+              codec_name.find("avc") != std::string::npos ||
+              codec_name.find("h264") != std::string::npos ||
+              codec_name.find("vp9") != std::string::npos ||
+              codec_name.find("av1") != std::string::npos) {
+            encoders.push_back(codec_name);
+          }
+        } else {
+          encoders.push_back(codec_name);
+        }
+      }
+    }
+  }
+
+  pclose(pipe);
+  return encoders;
+}
+
 #else  // !__ANDROID__
 
 // Stub implementations for non-Android platforms
@@ -649,7 +700,7 @@ void android_mediacodec_encode_cleanup(AMediaCodec* codec, int debug_level) {
 void android_mediacodec_set_format(AMediaFormat* format, const char* mime_type,
                                    int width, int height,
                                    const char* color_format, int* bitrate,
-                                   int quality) {
+                                   int quality, int bitrate_mode) {
   (void)format;
   (void)mime_type;
   (void)width;
@@ -672,6 +723,13 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
   *output_size = 0;
   fprintf(stderr, "Error: MediaCodec encoding only works on Android\n");
   return 1;
+}
+
+// List available encoder codec names (non-Android stub)
+std::vector<std::string> android_mediacodec_list_encoders(bool image_only) {
+  (void)image_only;
+  // Return empty vector on non-Android platforms
+  return std::vector<std::string>();
 }
 
 #endif  // __ANDROID__

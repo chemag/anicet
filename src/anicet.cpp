@@ -25,6 +25,7 @@
 // Encoder experiment runner
 #include "anicet_runner.h"
 #include "anicet_runner_jpegli.h"
+#include "anicet_runner_mediacodec.h"
 
 // Parameter descriptor system
 #include "anicet_parameter.h"
@@ -295,6 +296,11 @@ static int get_param_order(
     if (it != anicet::runner::jpegli::JPEGLI_PARAMETERS.end()) {
       return it->second.order;
     }
+  } else if (codec_name == "mediacodec") {
+    auto it = anicet::runner::mediacodec::MEDIACODEC_PARAMETERS.find(param_name);
+    if (it != anicet::runner::mediacodec::MEDIACODEC_PARAMETERS.end()) {
+      return it->second.order;
+    }
   }
   // Default order for unknown parameters
   return 100;
@@ -371,6 +377,8 @@ struct Options {
   std::vector<std::string> svtav1_params;
   // jpegli parameters from CLI (accumulated from multiple --jpegli flags)
   std::vector<std::string> jpegli_params;
+  // mediacodec parameters from CLI (accumulated from multiple --mediacodec flags)
+  std::vector<std::string> mediacodec_params;
   // parsed codec setup (populated after CLI parsing)
   CodecSetup codec_setup;
 };
@@ -413,6 +421,9 @@ static void print_help(const char* argv0) {
       "  --jpegli PARAMS          jpegli encoder parameters (repeatable, colon/comma-separated)\n"
       "                           Format: param=value:param=value or param=value,param=value\n"
       "                           Use '--jpegli help' for parameter list\n"
+      "  --mediacodec PARAMS      mediacodec encoder parameters (repeatable, colon/comma-separated)\n"
+      "                           Format: param=value:param=value or param=value,param=value\n"
+      "                           Use '--mediacodec help' for parameter list\n"
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
       "  --dump-output            Write output files to disk (default: disabled)\n"
       "  --no-dump-output         Do not write output files to disk\n"
@@ -451,6 +462,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     {"libjpeg-turbo", required_argument, nullptr, 1002},
     {"svt-av1", required_argument, nullptr, 1003},
     {"jpegli", required_argument, nullptr, 1004},
+    {"mediacodec", required_argument, nullptr, 1005},
     {"num-runs", required_argument, nullptr, 'N'},
     {"dump-output", no_argument, nullptr, 'D'},
     {"no-dump-output", no_argument, nullptr, 'O'},
@@ -749,6 +761,33 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
         break;
       }
 
+      case 1005: {
+        // Handle --mediacodec option
+        std::string arg(optarg);
+
+        // Check for help requests
+        if (arg == "help" || arg == "help -q" || arg == "help -v") {
+          using namespace anicet::parameter;
+          HelpVerbosity verbosity = HelpVerbosity::CONCISE;
+
+          if (arg == "help -q") {
+            verbosity = HelpVerbosity::COMPACT;
+          } else if (arg == "help -v") {
+            verbosity = HelpVerbosity::VERBOSE;
+          }
+
+          // Get parameters with dynamically populated codec list
+          auto mediacodec_params =
+              anicet::runner::mediacodec::get_mediacodec_parameters();
+          print_parameter_help("mediacodec", mediacodec_params, verbosity);
+          exit(0);
+        }
+
+        // Accumulate parameter string for later parsing
+        opt.mediacodec_params.push_back(arg);
+        break;
+      }
+
       case 'N':
         opt.num_runs = atoi(optarg);
         if (opt.num_runs < 1) {
@@ -899,6 +938,31 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     }
   }
 
+  // Parse mediacodec parameters if provided (do this BEFORE command validation)
+  if (!opt.mediacodec_params.empty()) {
+    // Initialize codec_setup with default values from descriptors
+    opt.codec_setup.num_runs = opt.num_runs;
+
+    // Get parameters with dynamically populated codec list
+    auto mediacodec_params_dynamic =
+        anicet::runner::mediacodec::get_mediacodec_parameters();
+
+    // Parse each parameter string
+    for (const auto& param_str : opt.mediacodec_params) {
+      if (!anicet::parameter::parse_parameter_string(
+              "mediacodec", param_str, mediacodec_params_dynamic,
+              &opt.codec_setup)) {
+        return false;
+      }
+    }
+
+    // Validate parameter dependencies
+    if (!anicet::parameter::validate_parameter_dependencies(
+            "mediacodec", mediacodec_params_dynamic, opt.codec_setup)) {
+      return false;
+    }
+  }
+
   // Command is optional if media parameters are provided
   bool has_media_params = !opt.image_file.empty() && opt.width > 0 &&
                           opt.height > 0 && !opt.color_format.empty();
@@ -1028,7 +1092,7 @@ int main(int argc, char** argv) {
         opt.dump_output_prefix.c_str(),
         opt.debug,
         &codec_output,
-        (!opt.x265_params.empty() || !opt.webp_params.empty() || !opt.libjpegturbo_params.empty() || !opt.svtav1_params.empty() || !opt.jpegli_params.empty()) ? &opt.codec_setup : nullptr
+        (!opt.x265_params.empty() || !opt.webp_params.empty() || !opt.libjpegturbo_params.empty() || !opt.svtav1_params.empty() || !opt.jpegli_params.empty() || !opt.mediacodec_params.empty()) ? &opt.codec_setup : nullptr
     );
 
     // Print simple debug output to stdout if debug level >= 1

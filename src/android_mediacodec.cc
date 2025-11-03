@@ -212,45 +212,9 @@ static bool parse_args(int argc, char** argv, Options& opt) {
 
 // Codec listing using dumpsys media.player
 static int list_codecs_cmd(const Options& opt) {
-  // Run dumpsys media.player to get codec list
-  FILE* pipe = popen("/system/bin/dumpsys media.player 2>/dev/null", "r");
-  if (!pipe) {
-    fprintf(stderr, "Error: Could not run dumpsys command\n");
-    return 1;
-  }
-
-  std::vector<std::string> encoders;
-  char buffer[1024];
-
-  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-    std::string line(buffer);
-
-    // Look for encoder lines: '  Encoder "codec.name" supports'
-    if (line.find("Encoder \"") != std::string::npos) {
-      size_t start = line.find("\"");
-      size_t end = line.find("\"", start + 1);
-      if (start != std::string::npos && end != std::string::npos) {
-        std::string codec_name = line.substr(start + 1, end - start - 1);
-
-        // Filter for image codecs if requested
-        if (opt.list_image_codecs) {
-          // Include HEVC, HEIC, AVC, H264, VP9, AV1 codecs
-          if (codec_name.find("hevc") != std::string::npos ||
-              codec_name.find("heic") != std::string::npos ||
-              codec_name.find("avc") != std::string::npos ||
-              codec_name.find("h264") != std::string::npos ||
-              codec_name.find("vp9") != std::string::npos ||
-              codec_name.find("av1") != std::string::npos) {
-            encoders.push_back(codec_name);
-          }
-        } else {
-          encoders.push_back(codec_name);
-        }
-      }
-    }
-  }
-
-  pclose(pipe);
+  // Use library function to get encoder list
+  std::vector<std::string> encoders =
+      android_mediacodec_list_encoders(opt.list_image_codecs);
 
   if (encoders.empty()) {
     fprintf(stderr, "No %sencoders found.\n",

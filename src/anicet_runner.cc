@@ -72,6 +72,11 @@ bool validate_parameter_list(const std::string& label,
                              const std::string& param_name,
                              const std::string& param_value,
                              const std::list<std::string>& valid_values) {
+  // Empty list means accept any value (no validation)
+  if (valid_values.empty()) {
+    return true;
+  }
+
   for (const auto& valid : valid_values) {
     if (param_value == valid) {
       return true;
@@ -381,6 +386,12 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
+
+    // Use codec_setup if provided, otherwise use defaults
+    if (codec_setup) {
+      setup = *codec_setup;
+    }
+
     if (anicet::runner::jpegli::anicet_run(&input, &setup, &local_output) ==
             0 &&
         local_output.num_frames() > 0) {
@@ -595,18 +606,48 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
-    setup.parameter_map["codec_name"] = "c2.android.hevc.encoder";
+
+    // Use codec_setup if provided, otherwise use defaults
+    if (codec_setup) {
+      setup = *codec_setup;
+    }
+
     if (anicet::runner::mediacodec::anicet_run(&input, &setup, &local_output) ==
             0 &&
         local_output.num_frames() > 0) {
       // Store codec name and parameters in output
       populate_codec_info(local_output, "mediacodec", setup);
 
-      // Generate filenames and optionally write files
+      // Generate filenames with all parameters
       for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
-        snprintf(filename, sizeof(filename), "%s/%s.mediacodec.index_%zu.bin",
-                 dump_output_dir, dump_output_prefix, i);
+        char filename[1024];
+
+        // Build filename with all parameters
+        std::stringstream ss;
+        ss << dump_output_dir << "/" << dump_output_prefix;
+        ss << ".codec_mediacodec";
+
+        // Convert parameters to string map
+        std::map<std::string, std::string> params =
+            convert_params_to_strings(setup.parameter_map);
+
+        // Convert to vector and sort with custom ordering from descriptors
+        std::vector<std::pair<std::string, std::string>> sorted_params(
+            params.begin(), params.end());
+        std::sort(
+            sorted_params.begin(), sorted_params.end(),
+            ParamComparator(anicet::runner::mediacodec::MEDIACODEC_PARAMETERS));
+
+        for (const auto& [key, value] : sorted_params) {
+          // Replace underscores with hyphens for consistency
+          std::string formatted_key = key;
+          std::replace(formatted_key.begin(), formatted_key.end(), '_', '-');
+          ss << "." << formatted_key << "_" << value;
+        }
+
+        ss << ".index_" << i << ".bin";
+
+        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
         local_output.output_files.push_back(filename);
 
         // Write output file if requested

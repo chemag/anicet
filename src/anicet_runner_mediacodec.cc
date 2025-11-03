@@ -19,6 +19,29 @@ static int g_debug_level __attribute__((unused)) = 0;
 // Use unified DEBUG macro from anicet_common.h
 #define DEBUG(level, ...) ANICET_DEBUG(g_debug_level, level, __VA_ARGS__)
 
+// Get MediaCodec parameter descriptors with dynamically populated codec list
+std::map<std::string, anicet::parameter::ParameterDescriptor>
+get_mediacodec_parameters() {
+  // Start with base parameters from MEDIACODEC_PARAMETERS
+  std::map<std::string, anicet::parameter::ParameterDescriptor> params =
+      MEDIACODEC_PARAMETERS;
+
+#ifdef __ANDROID__
+  // Query device for available encoders
+  std::vector<std::string> encoders =
+      android_mediacodec_list_encoders(true);  // image_only=true
+
+  // Populate codec_name valid_values with available codecs
+  if (!encoders.empty()) {
+    // Convert vector to list for ParameterDescriptor
+    std::list<std::string> codec_list(encoders.begin(), encoders.end());
+    params["codec_name"].valid_values = codec_list;
+  }
+#endif
+
+  return params;
+}
+
 // Android MediaCodec encoder - wrapper that adapts
 // android_mediacodec_encode_frame()
 int anicet_run(const CodecInput* input, CodecSetup* setup,
@@ -31,13 +54,52 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   int num_runs __attribute__((unused)) = setup->num_runs;
 
   // Extract codec_name from parameter_map
-  auto it = setup->parameter_map.find("codec_name");
-  if (it == setup->parameter_map.end()) {
-    fprintf(stderr, "MediaCodec: codec_name parameter not found in setup\n");
+  std::string codec_name_str = std::get<std::string>(
+      anicet::runner::mediacodec::MEDIACODEC_PARAMETERS.at("codec_name")
+          .default_value);
+  auto codec_name_it = setup->parameter_map.find("codec_name");
+  if (codec_name_it != setup->parameter_map.end()) {
+    codec_name_str = std::get<std::string>(codec_name_it->second);
+  } else {
+    setup->parameter_map["codec_name"] = codec_name_str;
+  }
+
+  // Validate codec_name is not empty (it's a required parameter)
+  if (codec_name_str.empty()) {
+    fprintf(stderr,
+            "mediacodec: codec_name parameter is required but not provided\n");
+    fprintf(stderr, "Usage: --mediacodec codec_name=<encoder_name>\n");
+    fprintf(stderr,
+            "Example: --mediacodec codec_name=c2.android.hevc.encoder\n");
     return -1;
   }
-  const char* codec_name __attribute__((unused)) =
-      std::get<std::string>(it->second).c_str();
+
+  // Extract quality parameter
+  int quality = anicet::runner::mediacodec::DEFAULT_QUALITY;
+  auto quality_it = setup->parameter_map.find("quality");
+  if (quality_it != setup->parameter_map.end()) {
+    quality = std::get<int>(quality_it->second);
+  } else {
+    setup->parameter_map["quality"] = quality;
+  }
+
+  // Extract bitrate parameter
+  int bitrate = anicet::runner::mediacodec::DEFAULT_BITRATE;
+  auto bitrate_it = setup->parameter_map.find("bitrate");
+  if (bitrate_it != setup->parameter_map.end()) {
+    bitrate = std::get<int>(bitrate_it->second);
+  } else {
+    setup->parameter_map["bitrate"] = bitrate;
+  }
+
+  // Extract bitrate_mode parameter
+  int bitrate_mode = anicet::runner::mediacodec::DEFAULT_BITRATE_MODE;
+  auto bitrate_mode_it = setup->parameter_map.find("bitrate_mode");
+  if (bitrate_mode_it != setup->parameter_map.end()) {
+    bitrate_mode = std::get<int>(bitrate_mode_it->second);
+  } else {
+    setup->parameter_map["bitrate_mode"] = bitrate_mode;
+  }
 
 #ifdef __ANDROID__
   // Profile total memory (all 4 steps: setup + conversion + encode + cleanup)
@@ -47,11 +109,11 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   MediaCodecFormat format;
   format.width = input->width;
   format.height = input->height;
-  format.codec_name = codec_name;
+  format.codec_name = codec_name_str.c_str();
   format.color_format = input->color_format;
-  format.quality = 75;
-  // Auto-calculate from quality
-  format.bitrate = -1;
+  format.quality = quality;
+  format.bitrate = bitrate;
+  format.bitrate_mode = bitrate_mode;
   // Use global debug level
   format.debug_level = android_mediacodec_get_debug_level();
 

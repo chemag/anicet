@@ -8,6 +8,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+#include <string>
+#include <vector>
+#endif
+
 // Include common codec structures
 #include "anicet_runner.h"
 
@@ -54,7 +59,7 @@ struct AMediaFormat;
 void android_mediacodec_set_format(struct AMediaFormat* format,
                                    const char* mime_type, int width, int height,
                                    const char* color_format, int* bitrate,
-                                   int quality);
+                                   int quality, int bitrate_mode);
 
 // MediaCodec encoding format configuration
 typedef struct {
@@ -70,6 +75,8 @@ typedef struct {
   int quality;
   // Target bitrate in bps (if < 0, calculated from quality)
   int bitrate;
+  // Bitrate mode (0=CQ, 1=VBR, 2=CBR)
+  int bitrate_mode;
   // Debug verbosity (0 = quiet, 1+ = verbose)
   int debug_level;
 } MediaCodecFormat;
@@ -154,6 +161,19 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
 
 #ifdef __cplusplus
 }
+
+// C++ only functions (after extern "C" block)
+
+// Get list of available encoder codec names
+//
+// Parameters:
+//   image_only: If true, only return image/video codecs (HEVC, AVC, VP9, AV1)
+//
+// Returns:
+//   std::vector<std::string> containing available encoder codec names
+//   Empty vector if no encoders found or on error
+std::vector<std::string> android_mediacodec_list_encoders(bool image_only);
+
 #endif
 
 #endif  // ANDROID_MEDIACODEC_LIB_H
