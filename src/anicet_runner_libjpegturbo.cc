@@ -16,6 +16,8 @@ namespace anicet {
 namespace runner {
 namespace libjpegturbo {
 
+using anicet::runner::libjpegturbo::DEFAULT_QUALITY;
+
 // libjpeg-turbo encoder - uses dlopen to load library based on optimization
 // parameter
 int anicet_run(const CodecInput* input, CodecSetup* setup,
@@ -45,6 +47,9 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   auto opt_it = setup->parameter_map.find("optimization");
   if (opt_it != setup->parameter_map.end()) {
     optimization = std::get<std::string>(opt_it->second);
+  } else {
+    // Set default optimization in parameter_map so it gets reported
+    setup->parameter_map["optimization"] = optimization;
   }
 
   const char* library_name = (optimization == "nonopt")
@@ -94,6 +99,15 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     return -1;
   }
 
+  // Get quality parameter
+  int quality = DEFAULT_QUALITY;
+  auto quality_it = setup->parameter_map.find("quality");
+  if (quality_it != setup->parameter_map.end()) {
+    quality = std::get<int>(quality_it->second);
+  } else {
+    setup->parameter_map["quality"] = quality;
+  }
+
   // (b) Input conversion: None needed - TurboJPEG takes YUV420 directly
 
   // (c) Actual encoding - run num_runs times
@@ -110,7 +124,7 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     // Compress YUV to JPEG - tjCompressFromYUV allocates output buffer
     int ret = compressFromYUV(tj_handle, input->input_buffer, input->width, 1,
                               input->height, TJSAMP_420, &jpeg_buf, &jpeg_size,
-                              75, TJFLAG_FASTDCT);
+                              quality, TJFLAG_FASTDCT);
     if (ret != 0) {
       fprintf(stderr, "libjpeg-turbo: Encoding failed: %s\n",
               getErrorStr2(tj_handle));

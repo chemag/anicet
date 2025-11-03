@@ -315,6 +315,8 @@ static void print_help_concise(
   } else if (codec_name == "webp") {
     printf("Example: --%s optimization=opt:quality=90:method=6\n",
            codec_name.c_str());
+  } else if (codec_name == "libjpeg-turbo") {
+    printf("Example: --%s optimization=opt:quality=90\n", codec_name.c_str());
   } else {
     printf("Example: --%s param1=value1:param2=value2\n", codec_name.c_str());
   }
@@ -381,6 +383,8 @@ static void print_help_verbose(
            codec_name.c_str());
   } else if (codec_name == "webp") {
     printf("--%s optimization=opt:quality=90:method=6\n\n", codec_name.c_str());
+  } else if (codec_name == "libjpeg-turbo") {
+    printf("--%s optimization=opt:quality=90\n\n", codec_name.c_str());
   } else {
     printf("--%s param1=value1:param2=value2\n\n", codec_name.c_str());
   }

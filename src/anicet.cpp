@@ -29,6 +29,7 @@
 #include "anicet_parameter.h"
 
 // Codec-specific runners
+#include "anicet_runner_libjpegturbo.h"
 #include "anicet_runner_x265.h"
 #include "anicet_runner_webp.h"
 
@@ -45,7 +46,7 @@
 // Valid codec name(s)
 std::set<std::string> VALID_CODECS = {
   "x265", "svt-av1", "libjpeg-turbo",
-  "libjpeg-turbo-nonopt", "jpegli", "webp",
+  "jpegli", "webp",
   "mediacodec", "all"
 };
 
@@ -277,6 +278,11 @@ static int get_param_order(
     if (it != anicet::runner::webp::WEBP_PARAMETERS.end()) {
       return it->second.order;
     }
+  } else if (codec_name == "libjpeg-turbo") {
+    auto it = anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS.find(param_name);
+    if (it != anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS.end()) {
+      return it->second.order;
+    }
   }
   // Default order for unknown parameters
   return 100;
@@ -347,6 +353,8 @@ struct Options {
   std::vector<std::string> x265_params;
   // webp parameters from CLI (accumulated from multiple --webp flags)
   std::vector<std::string> webp_params;
+  // libjpeg-turbo parameters from CLI (accumulated from multiple --libjpeg-turbo flags)
+  std::vector<std::string> libjpegturbo_params;
   // parsed codec setup (populated after CLI parsing)
   CodecSetup codec_setup;
 };
@@ -372,14 +380,17 @@ static void print_help(const char* argv0) {
       "  --height N               Image height in pixels\n"
       "  --color-format FORMAT    Color format (e.g., yuv420p)\n"
       "  --codec CODEC            Codec to use: x265, svt-av1,\n"
-      "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
-      "                           webp, mediacodec, all (default: all)\n"
+      "                           libjpeg-turbo, jpegli, webp,\n"
+      "                           mediacodec, all (default: all)\n"
       "  --x265 PARAMS            x265 encoder parameters (repeatable, colon/comma-separated)\n"
       "                           Format: param=value:param=value or param=value,param=value\n"
       "                           Use '--x265 help' for parameter list\n"
       "  --webp PARAMS            webp encoder parameters (repeatable, colon/comma-separated)\n"
       "                           Format: param=value:param=value or param=value,param=value\n"
       "                           Use '--webp help' for parameter list\n"
+      "  --libjpeg-turbo PARAMS   libjpeg-turbo encoder parameters (repeatable, colon/comma-separated)\n"
+      "                           Format: param=value:param=value or param=value,param=value\n"
+      "                           Use '--libjpeg-turbo help' for parameter list\n"
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
       "  --dump-output            Write output files to disk (default: disabled)\n"
       "  --no-dump-output         Do not write output files to disk\n"
@@ -415,6 +426,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     {"codec", required_argument, nullptr, 'C'},
     {"x265", required_argument, nullptr, 1000},
     {"webp", required_argument, nullptr, 1001},
+    {"libjpeg-turbo", required_argument, nullptr, 1002},
     {"num-runs", required_argument, nullptr, 'N'},
     {"dump-output", no_argument, nullptr, 'D'},
     {"no-dump-output", no_argument, nullptr, 'O'},
@@ -606,6 +618,31 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
         break;
       }
 
+      case 1002: {
+        // Handle --libjpeg-turbo option
+        std::string arg(optarg);
+
+        // Check for help requests
+        if (arg == "help" || arg == "help -q" || arg == "help -v") {
+          using namespace anicet::parameter;
+          HelpVerbosity verbosity = HelpVerbosity::CONCISE;
+
+          if (arg == "help -q") {
+            verbosity = HelpVerbosity::COMPACT;
+          } else if (arg == "help -v") {
+            verbosity = HelpVerbosity::VERBOSE;
+          }
+
+          print_parameter_help("libjpeg-turbo", anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS,
+                              verbosity);
+          exit(0);
+        }
+
+        // Accumulate parameter string for later parsing
+        opt.libjpegturbo_params.push_back(arg);
+        break;
+      }
+
       case 'N':
         opt.num_runs = atoi(optarg);
         if (opt.num_runs < 1) {
@@ -689,6 +726,27 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     // Validate parameter dependencies
     if (!anicet::parameter::validate_parameter_dependencies(
             "webp", anicet::runner::webp::WEBP_PARAMETERS, opt.codec_setup)) {
+      return false;
+    }
+  }
+
+  // Parse libjpeg-turbo parameters if provided (do this BEFORE command validation)
+  if (!opt.libjpegturbo_params.empty()) {
+    // Initialize codec_setup with default values from descriptors
+    opt.codec_setup.num_runs = opt.num_runs;
+
+    // Parse each parameter string
+    for (const auto& param_str : opt.libjpegturbo_params) {
+      if (!anicet::parameter::parse_parameter_string(
+              "libjpeg-turbo", param_str, anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS,
+              &opt.codec_setup)) {
+        return false;
+      }
+    }
+
+    // Validate parameter dependencies
+    if (!anicet::parameter::validate_parameter_dependencies(
+            "libjpeg-turbo", anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS, opt.codec_setup)) {
       return false;
     }
   }
@@ -816,7 +874,7 @@ int main(int argc, char** argv) {
         opt.dump_output_prefix.c_str(),
         opt.debug,
         &codec_output,
-        (!opt.x265_params.empty() || !opt.webp_params.empty()) ? &opt.codec_setup : nullptr
+        (!opt.x265_params.empty() || !opt.webp_params.empty() || !opt.libjpegturbo_params.empty()) ? &opt.codec_setup : nullptr
     );
 
     // Print simple debug output to stdout if debug level >= 1

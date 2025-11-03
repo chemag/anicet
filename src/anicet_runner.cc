@@ -221,7 +221,6 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   bool run_all = codec_in_list("all");
   bool run_webp = run_all || codec_in_list("webp");
   bool run_libjpeg_turbo = run_all || codec_in_list("libjpeg-turbo");
-  bool run_libjpeg_turbo_nonopt = codec_in_list("libjpeg-turbo-nonopt");
   bool run_jpegli = run_all || codec_in_list("jpegli");
   bool run_x265 = run_all || codec_in_list("x265");
   bool run_svtav1 = run_all || codec_in_list("svt-av1");
@@ -307,15 +306,18 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   }
 
   // 2. libjpeg-turbo encoding
-  if (run_libjpeg_turbo || run_libjpeg_turbo_nonopt) {
+  if (run_libjpeg_turbo) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
-    if (run_libjpeg_turbo) {
+
+    // Use codec_setup if provided, otherwise use defaults
+    if (codec_setup) {
+      setup = *codec_setup;
+    } else {
+      // Set default optimization
       setup.parameter_map["optimization"] = "opt";
-    } else if (run_libjpeg_turbo_nonopt) {
-      setup.parameter_map["optimization"] = "nonopt";
     }
     if (anicet::runner::libjpegturbo::anicet_run(&input, &setup,
                                                  &local_output) == 0 &&
@@ -325,12 +327,31 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
-        std::string optimization =
-            std::get<std::string>(setup.parameter_map["optimization"]);
-        snprintf(filename, sizeof(filename),
-                 "%s/%s.libjpegturbo.optimization_%s.index_%zu.jpeg",
-                 dump_output_dir, dump_output_prefix, optimization.c_str(), i);
+        char filename[1024];
+
+        // Build filename with all parameters
+        std::stringstream ss;
+        ss << dump_output_dir << "/" << dump_output_prefix;
+        ss << ".codec_libjpeg-turbo";
+
+        // Convert parameters to string map
+        std::map<std::string, std::string> params =
+            convert_params_to_strings(setup.parameter_map);
+
+        // Convert to vector and sort with custom ordering from descriptors
+        std::vector<std::pair<std::string, std::string>> sorted_params(
+            params.begin(), params.end());
+        std::sort(sorted_params.begin(), sorted_params.end(),
+                  ParamComparator(
+                      anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS));
+
+        for (const auto& [key, value] : sorted_params) {
+          ss << "." << key << "_" << value;
+        }
+
+        ss << ".index_" << i << ".jpeg";
+
+        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
         local_output.output_files.push_back(filename);
 
         // Write output file if requested
