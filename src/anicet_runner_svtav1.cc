@@ -109,16 +109,6 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   }
   config.qp = qp;
 
-  // Get rate_control_mode parameter
-  int rate_control_mode = 0;
-  auto rc_it = setup->parameter_map.find("rate_control_mode");
-  if (rc_it != setup->parameter_map.end()) {
-    rate_control_mode = std::get<int>(rc_it->second);
-  } else {
-    setup->parameter_map["rate_control_mode"] = rate_control_mode;
-  }
-  config.rate_control_mode = rate_control_mode;
-
   // Get tune parameter
   int tune = 1;
   auto tune_it = setup->parameter_map.find("tune");
@@ -128,6 +118,16 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     setup->parameter_map["tune"] = tune;
   }
   config.tune = tune;
+
+  // NOTE: We are supporting neither bitrate mode
+  // (`rate_control_mode`) nor bitrate parameters
+  // (`target_bit_rate` or `max_bit_rate`). Instead we
+  // hardcode the rate control mode to CQP, and only
+  // allow setting the qp parameter. The reason is that
+  // SVT-AV1 does not support intra-only encoding when
+  // using VBR (`rate_control_mode=1`) or CBR
+  // (`rate_control_mode=2`) modes.
+  config.rate_control_mode = 0;  // CQP mode
 
   // Get use_cpu_flags parameter
   std::string use_cpu_flags = "all";
@@ -170,30 +170,6 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   } else {
     config.use_cpu_flags =
         EB_CPU_FLAGS_ALL;  // Auto-detect and use all available
-  }
-
-  // Get target_bit_rate parameter (only for VBR/CBR modes)
-  // SVT-AV1 validates that target_bit_rate should only be set for VBR (1) or
-  // CBR (2)
-  if (rate_control_mode == 1 || rate_control_mode == 2) {
-    int target_bit_rate = 2000000;
-    auto tbr_it = setup->parameter_map.find("target_bit_rate");
-    if (tbr_it != setup->parameter_map.end()) {
-      target_bit_rate = std::get<int>(tbr_it->second);
-    } else {
-      setup->parameter_map["target_bit_rate"] = target_bit_rate;
-    }
-    config.target_bit_rate = target_bit_rate;
-
-    // Get max_bit_rate parameter (only for VBR mode)
-    int max_bit_rate = 0;
-    auto mbr_it = setup->parameter_map.find("max_bit_rate");
-    if (mbr_it != setup->parameter_map.end()) {
-      max_bit_rate = std::get<int>(mbr_it->second);
-    } else {
-      setup->parameter_map["max_bit_rate"] = max_bit_rate;
-    }
-    config.max_bit_rate = max_bit_rate;
   }
 
   res = svt_av1_enc_set_parameter(handle, &config);
