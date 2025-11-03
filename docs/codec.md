@@ -107,11 +107,9 @@ $ cat setup.json
 
 # 2. x265 (H.265/HEVC)
 
-Variants
-* `x265`: Optimized build with NEON/assembly optimizations
-* `x265nonopt`: Non-optimized build without SIMD optimizations
-
 Parameters
+* **Optimization**: Whether the encoder was compiled with SIMD optimizations
+  - Available options: `"opt"` (optimized build with NEON/assembly optimizations), `"nonopt"` (non-optimized build without SIMD optimizations)
 * **Preset**: `"medium"`: Encoding speed/quality trade-off
   - Available options: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo
   - Higher presets = slower encoding, better compression
@@ -191,17 +189,15 @@ Notes:
 
 # 4. libjpeg-turbo (JPEG)
 
-Variants
-* `libjpeg-turbo`: Optimized build with SIMD optimizations (NEON on ARM)
-* `libjpeg-turbo-nonopt`: Non-optimized build without SIMD
-
 Parameters
+* **Optimization**: Whether the encoder was compiled with SIMD optimizations
+  - Available options: `"opt"` (optimized build with SIMD optimizations -- NEON on ARM), `"nonopt"` (non-optimized build without SIMD optimizations)
 * **Quality**: 75
   - Range: 0-100, where 100 = highest quality, minimal compression
   - 75 is typically considered "high quality" for JPEG
 * **DCT Method**:
-  - Optimized: `TJFLAG_FASTDCT` (fast discrete cosine transform)
-  - Non-optimized: Slower accurate DCT
+  - Optimized: `TJFLAG_FASTDCT`: Fast, less-accurate DCT (discrete cosine transform)
+  - Non-optimized: `TJFLAG_ACCURATEDCT`: Slower, more-accurate DCT
 * **Subsampling**: `TJSAMP_420` (4:2:0 chroma subsampling)
   - Matches YUV420p input format
 * **Color space**: YCbCr (converted from YUV420p input)
@@ -255,11 +251,9 @@ Notes
 
 # 6. WebP
 
-Variants
-* `webp`: Optimized build with SIMD optimizations
-* `webp-nonopt`: Non-optimized build without SIMD
-
 Parameters
+* **Optimization**: Whether the encoder was compiled with SIMD optimizations
+  - Available options: `"opt"` (optimized build with SIMD optimizations), `"nonopt"` (non-optimized build without SIMD optimizations)
 * **Quality**: 75
   - Range: 0-100 (lossy compression)
   - 100 = lossless compression
