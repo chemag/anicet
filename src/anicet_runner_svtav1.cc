@@ -23,6 +23,9 @@ namespace anicet {
 namespace runner {
 namespace svtav1 {
 
+using anicet::runner::svtav1::DEFAULT_PRESET;
+using anicet::runner::svtav1::DEFAULT_QP;
+
 // SVT-AV1 encoder - writes to caller-provided memory buffer only
 int anicet_run(const CodecInput* input, CodecSetup* setup,
                CodecOutput* output) {
@@ -85,6 +88,113 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   config.intra_period_length = -1;
   // Key frame refresh
   config.intra_refresh_type = SVT_AV1_KF_REFRESH;
+
+  // Get preset parameter
+  int preset = DEFAULT_PRESET;
+  auto preset_it = setup->parameter_map.find("preset");
+  if (preset_it != setup->parameter_map.end()) {
+    preset = std::get<int>(preset_it->second);
+  } else {
+    setup->parameter_map["preset"] = preset;
+  }
+  config.enc_mode = preset;
+
+  // Get qp parameter
+  int qp = DEFAULT_QP;
+  auto qp_it = setup->parameter_map.find("qp");
+  if (qp_it != setup->parameter_map.end()) {
+    qp = std::get<int>(qp_it->second);
+  } else {
+    setup->parameter_map["qp"] = qp;
+  }
+  config.qp = qp;
+
+  // Get rate_control_mode parameter
+  int rate_control_mode = 0;
+  auto rc_it = setup->parameter_map.find("rate_control_mode");
+  if (rc_it != setup->parameter_map.end()) {
+    rate_control_mode = std::get<int>(rc_it->second);
+  } else {
+    setup->parameter_map["rate_control_mode"] = rate_control_mode;
+  }
+  config.rate_control_mode = rate_control_mode;
+
+  // Get tune parameter
+  int tune = 1;
+  auto tune_it = setup->parameter_map.find("tune");
+  if (tune_it != setup->parameter_map.end()) {
+    tune = std::get<int>(tune_it->second);
+  } else {
+    setup->parameter_map["tune"] = tune;
+  }
+  config.tune = tune;
+
+  // Get use_cpu_flags parameter
+  std::string use_cpu_flags = "all";
+  auto cpu_flags_it = setup->parameter_map.find("use_cpu_flags");
+  if (cpu_flags_it != setup->parameter_map.end()) {
+    use_cpu_flags = std::get<std::string>(cpu_flags_it->second);
+  } else {
+    setup->parameter_map["use_cpu_flags"] = use_cpu_flags;
+  }
+
+  // TODO(chemag): reconsider svt-av1 SIMD options
+  // svt-av1 provides finer-grained control over SIMD optimizations.
+  // * 0: C-only, no SIMD optimizations
+  // * EB_CPU_FLAGS_NEON (bit 0 = 1 << 0)
+  //   - Armv8.0-A mandatory - Basic NEON SIMD instructions
+  //   - Present in ALL ARMv8 processors
+  //   - Fundamental ARM SIMD (similar to SSE2 on x86)
+  // * EB_CPU_FLAGS_ARM_CRC32 (bit 1 = 1 << 1)
+  //   - Armv8.0-A optional, Armv8.1-A mandatory
+  //   - CRC32 checksum acceleration instructions
+  //   - Not strictly SIMD, but useful for encoding
+  // * EB_CPU_FLAGS_NEON_DOTPROD (bit 2 = 1 << 2)
+  //   - Armv8.2-A optional, Armv8.4-A mandatory
+  //   - Dot-product instructions (great for matrix operations)
+  //   - Example: Apple A12+ chips, Cortex-A76+
+  // * EB_CPU_FLAGS_NEON_I8MM (bit 3 = 1 << 3)
+  //   - Armv8.2-A optional, Armv8.6-A mandatory
+  //   - Integer 8-bit Matrix Multiply instructions
+  //   - Example: Apple A14+ chips, newer ARM servers
+  // * EB_CPU_FLAGS_SVE (bit 4 = 1 << 4)
+  //   - Armv8.2-A optional, Armv9.0-A mandatory
+  //   - Scalable Vector Extension (variable-width SIMD)
+  //   - Fujitsu A64FX, ARM Neoverse V1+
+  // * EB_CPU_FLAGS_SVE2 (bit 5 = 1 << 5)
+  //   - Armv9.0-A
+  //   - Enhanced SVE with more operations
+  //   - Very new ARM cores
+  if (use_cpu_flags == "none") {
+    config.use_cpu_flags = 0;  // C-only, no SIMD
+  } else {
+    config.use_cpu_flags =
+        EB_CPU_FLAGS_ALL;  // Auto-detect and use all available
+  }
+
+  // Get target_bit_rate parameter (only for VBR/CBR modes)
+  // SVT-AV1 validates that target_bit_rate should only be set for VBR (1) or
+  // CBR (2)
+  if (rate_control_mode == 1 || rate_control_mode == 2) {
+    int target_bit_rate = 2000000;
+    auto tbr_it = setup->parameter_map.find("target_bit_rate");
+    if (tbr_it != setup->parameter_map.end()) {
+      target_bit_rate = std::get<int>(tbr_it->second);
+    } else {
+      setup->parameter_map["target_bit_rate"] = target_bit_rate;
+    }
+    config.target_bit_rate = target_bit_rate;
+
+    // Get max_bit_rate parameter (only for VBR mode)
+    int max_bit_rate = 0;
+    auto mbr_it = setup->parameter_map.find("max_bit_rate");
+    if (mbr_it != setup->parameter_map.end()) {
+      max_bit_rate = std::get<int>(mbr_it->second);
+    } else {
+      setup->parameter_map["max_bit_rate"] = max_bit_rate;
+    }
+    config.max_bit_rate = max_bit_rate;
+  }
 
   res = svt_av1_enc_set_parameter(handle, &config);
   if (res != EB_ErrorNone) {

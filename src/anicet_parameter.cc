@@ -317,6 +317,8 @@ static void print_help_concise(
            codec_name.c_str());
   } else if (codec_name == "libjpeg-turbo") {
     printf("Example: --%s optimization=opt:quality=90\n", codec_name.c_str());
+  } else if (codec_name == "svt-av1") {
+    printf("Example: --%s preset=8:qp=35\n", codec_name.c_str());
   } else {
     printf("Example: --%s param1=value1:param2=value2\n", codec_name.c_str());
   }
@@ -385,6 +387,8 @@ static void print_help_verbose(
     printf("--%s optimization=opt:quality=90:method=6\n\n", codec_name.c_str());
   } else if (codec_name == "libjpeg-turbo") {
     printf("--%s optimization=opt:quality=90\n\n", codec_name.c_str());
+  } else if (codec_name == "svt-av1") {
+    printf("--%s preset=8:qp=35\n\n", codec_name.c_str());
   } else {
     printf("--%s param1=value1:param2=value2\n\n", codec_name.c_str());
   }
