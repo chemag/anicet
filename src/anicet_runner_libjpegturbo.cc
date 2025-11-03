@@ -108,6 +108,18 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     setup->parameter_map["quality"] = quality;
   }
 
+  // Get dct parameter
+  std::string dct = "fastdct";
+  auto dct_it = setup->parameter_map.find("dct");
+  if (dct_it != setup->parameter_map.end()) {
+    dct = std::get<std::string>(dct_it->second);
+  } else {
+    setup->parameter_map["dct"] = dct;
+  }
+
+  // Determine DCT flag
+  int dct_flag = (dct == "accuratedct") ? TJFLAG_ACCURATEDCT : TJFLAG_FASTDCT;
+
   // (b) Input conversion: None needed - TurboJPEG takes YUV420 directly
 
   // (c) Actual encoding - run num_runs times
@@ -124,7 +136,7 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     // Compress YUV to JPEG - tjCompressFromYUV allocates output buffer
     int ret = compressFromYUV(tj_handle, input->input_buffer, input->width, 1,
                               input->height, TJSAMP_420, &jpeg_buf, &jpeg_size,
-                              quality, TJFLAG_FASTDCT);
+                              quality, dct_flag);
     if (ret != 0) {
       fprintf(stderr, "libjpeg-turbo: Encoding failed: %s\n",
               getErrorStr2(tj_handle));

@@ -45,7 +45,18 @@ const std::map<std::string, anicet::parameter::ParameterDescriptor>
           .default_value = DEFAULT_QUALITY,
           .requires_param = std::nullopt,
           .requires_value = std::nullopt,
-          .order = 1}}};
+          .order = 1}},
+        {"dct",
+         {.name = "dct",
+          .type = anicet::parameter::ParameterType::STRING_LIST,
+          .description = "DCT method (fastdct=fast, accuratedct=accurate)",
+          .valid_values = {"fastdct", "accuratedct"},
+          .min_value = 0,
+          .max_value = 0,
+          .default_value = std::string("fastdct"),
+          .requires_param = std::nullopt,
+          .requires_value = std::nullopt,
+          .order = 2}}};
 
 // Runner - dispatches to opt or nonopt based on setup parameters
 int anicet_run(const CodecInput* input, CodecSetup* setup, CodecOutput* output);
