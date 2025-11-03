@@ -451,9 +451,9 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
   };
 
   // Preprocess argv to expand -dd, -ddd into -d -d -d
-  std::vector<char*> new_argv;
+  // First, build all expanded strings to avoid pointer invalidation
   std::vector<std::string> expanded_args;
-  new_argv.push_back(argv[0]);
+  std::vector<int> arg_mapping; // Maps to original argv index, or -1 for expanded
 
   for (int i = 1; i < argc; i++) {
     // Check for -dd, -ddd, etc.
@@ -468,22 +468,54 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
         // Expand -dd into multiple -d
         for (int j = 0; j < d_count; j++) {
           expanded_args.push_back("-d");
-          new_argv.push_back(const_cast<char*>(expanded_args.back().c_str()));
+          arg_mapping.push_back(-1);
         }
         continue;
       }
     }
-    new_argv.push_back(argv[i]);
+    arg_mapping.push_back(i);
+  }
+
+  // Now build new_argv with stable pointers
+  std::vector<char*> new_argv;
+  new_argv.push_back(argv[0]);
+
+  int expanded_idx = 0;
+  for (int mapping : arg_mapping) {
+    if (mapping == -1) {
+      // This is an expanded -d
+      new_argv.push_back(const_cast<char*>(expanded_args[expanded_idx].c_str()));
+      expanded_idx++;
+    } else {
+      // This is an original argument
+      new_argv.push_back(argv[mapping]);
+    }
   }
 
   int new_argc = new_argv.size();
   char** new_argv_ptr = new_argv.data();
 
+  // Debug: print expanded argv
+  if (getenv("ANICET_DEBUG_GETOPT")) {
+    fprintf(stderr, "DEBUG: Expanded argv (new_argc=%d):\n", new_argc);
+    for (int i = 0; i < new_argc; ++i) {
+      fprintf(stderr, "  [%d] '%s'\n", i, new_argv_ptr[i]);
+    }
+  }
+
+  // Reset getopt state for the new argv
+  optind = 1;
+  opterr = 1;
+
+  // Ensure getopt uses permutation mode (allows options after non-options)
+  // This is needed on some systems where POSIXLY_CORRECT might be set
+  unsetenv("POSIXLY_CORRECT");
+
   // Parse options using getopt_long
   int opt_char;
   int option_index = 0;
 
-  while ((opt_char = getopt_long(new_argc, new_argv_ptr, "hdo:", long_options, &option_index)) != -1) {
+  while ((opt_char = getopt_long(new_argc, new_argv_ptr, "hvjt:c:n:T:sSe:i:w:H:f:C:N:DOr:p:o:dq", long_options, &option_index)) != -1) {
     switch (opt_char) {
       case 'h':
         print_help(argv[0]);
@@ -814,6 +846,12 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
                           opt.height > 0 && !opt.color_format.empty();
 
   // Collect any remaining non-option arguments as command
+  if (opt.debug >= 2) {
+    fprintf(stderr, "DEBUG: optind=%d, new_argc=%d\n", optind, new_argc);
+    for (int i = optind; i < new_argc; ++i) {
+      fprintf(stderr, "DEBUG: new_argv[%d]='%s'\n", i, new_argv_ptr[i]);
+    }
+  }
   for (int i = optind; i < new_argc; ++i) {
     opt.cmd.emplace_back(new_argv_ptr[i]);
   }
