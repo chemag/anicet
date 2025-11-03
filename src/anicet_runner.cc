@@ -389,9 +389,33 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
-        snprintf(filename, sizeof(filename), "%s/%s.jpegli.index_%zu.jpeg",
-                 dump_output_dir, dump_output_prefix, i);
+        char filename[1024];
+
+        // Build filename with all parameters
+        std::stringstream ss;
+        ss << dump_output_dir << "/" << dump_output_prefix;
+        ss << ".codec_jpegli";
+
+        // Convert parameters to string map
+        std::map<std::string, std::string> params =
+            convert_params_to_strings(setup.parameter_map);
+
+        // Convert to vector and sort with custom ordering from descriptors
+        std::vector<std::pair<std::string, std::string>> sorted_params(
+            params.begin(), params.end());
+        std::sort(sorted_params.begin(), sorted_params.end(),
+                  ParamComparator(anicet::runner::jpegli::JPEGLI_PARAMETERS));
+
+        for (const auto& [key, value] : sorted_params) {
+          // Replace underscores with hyphens for consistency
+          std::string formatted_key = key;
+          std::replace(formatted_key.begin(), formatted_key.end(), '_', '-');
+          ss << "." << formatted_key << "_" << value;
+        }
+
+        ss << ".index_" << i << ".jpeg";
+
+        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
         local_output.output_files.push_back(filename);
 
         // Write output file if requested

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "anicet_common.h"
+#include "hwy/targets.h"
 #include "jpeglib.h"
 #include "resource_profiler.h"
 
@@ -52,7 +53,50 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
   cinfo.in_color_space = JCS_YCbCr;
 
   jpeg_set_defaults(&cinfo);
-  jpeg_set_quality(&cinfo, 75, TRUE);
+
+  // Get quality parameter
+  int quality = anicet::runner::jpegli::DEFAULT_QUALITY;
+  auto quality_it = setup->parameter_map.find("quality");
+  if (quality_it != setup->parameter_map.end()) {
+    quality = std::get<int>(quality_it->second);
+  } else {
+    setup->parameter_map["quality"] = quality;
+  }
+
+  // Get highway_target parameter and configure Highway dispatch
+  std::string highway_target = std::get<std::string>(
+      anicet::runner::jpegli::JPEGLI_PARAMETERS.at("highway_target")
+          .default_value);
+  auto highway_target_it = setup->parameter_map.find("highway_target");
+  if (highway_target_it != setup->parameter_map.end()) {
+    highway_target = std::get<std::string>(highway_target_it->second);
+  } else {
+    setup->parameter_map["highway_target"] = highway_target;
+  }
+
+  // TODO(chemag): reconsider jpegli highway SIMD options
+  // highway provides finer-grained control over SIMD optimizations.
+  // * support no targets
+  // * support all targets
+  // * `HWY_NEON`: ARM NEON (baseline)
+  // * `HWY_NEON_BF16`: NEON with BFloat16
+  // * `HWY_SVE`: ARM SVE (Scalable Vector Extension)
+  // * `HWY_SVE2`: ARM SVE2
+  // * `HWY_SVE_256`: SVE with 256-bit vectors
+  // * `HWY_SVE2_128`: SVE2 with 128-bit vectors
+
+  // Configure Highway target selection
+  if (highway_target == "none") {
+    // Disable all SIMD targets, leaving only scalar
+    hwy::SetSupportedTargetsForTest(HWY_SCALAR);
+
+    if (input->debug_level >= 2) {
+      fprintf(stderr, "jpegli: Setting Highway target to none (scalar-only)\n");
+    }
+  }
+  // "all" means use auto-dispatch (default), no action needed
+
+  jpeg_set_quality(&cinfo, quality, TRUE);
 
   // Enable raw data mode for direct YUV420p input
   cinfo.raw_data_in = TRUE;
@@ -186,6 +230,14 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
 
   // (d) Codec cleanup
   jpeg_destroy_compress(&cinfo);
+
+  // Reset Highway target selection to auto-dispatch
+  if (highway_target == "none") {
+    hwy::SetSupportedTargetsForTest(0);  // 0 disables the mock
+    if (input->debug_level >= 2) {
+      fprintf(stderr, "jpegli: Resetting Highway target to auto-dispatch\n");
+    }
+  }
 
   ResourceSnapshot __profile_mem_end;
   capture_resources(&__profile_mem_end);
