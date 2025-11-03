@@ -16,6 +16,9 @@ namespace anicet {
 namespace runner {
 namespace webp {
 
+using anicet::runner::webp::DEFAULT_METHOD;
+using anicet::runner::webp::DEFAULT_QUALITY;
+
 // Runner - uses dlopen to load WebP library based on optimization parameter
 int anicet_run(const CodecInput* input, CodecSetup* setup,
                CodecOutput* output) {
@@ -26,9 +29,12 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
 
   // Determine library name from optimization parameter
   std::string optimization = "opt";
-  auto it = setup->parameter_map.find("optimization");
-  if (it != setup->parameter_map.end()) {
-    optimization = std::get<std::string>(it->second);
+  auto opt_it = setup->parameter_map.find("optimization");
+  if (opt_it != setup->parameter_map.end()) {
+    optimization = std::get<std::string>(opt_it->second);
+  } else {
+    // Set default optimization in parameter_map so it gets reported
+    setup->parameter_map["optimization"] = optimization;
   }
 
   const char* library_name =
@@ -103,9 +109,23 @@ int anicet_run(const CodecInput* input, CodecSetup* setup,
     return -1;
   }
 
-  config.quality = 75;
-  // Speed/quality trade-off
-  config.method = 4;
+  // Get quality parameter
+  auto quality_it = setup->parameter_map.find("quality");
+  if (quality_it != setup->parameter_map.end()) {
+    config.quality = std::get<int>(quality_it->second);
+  } else {
+    config.quality = DEFAULT_QUALITY;
+    setup->parameter_map["quality"] = static_cast<int>(config.quality);
+  }
+
+  // Get method parameter (speed/quality trade-off)
+  auto method_it = setup->parameter_map.find("method");
+  if (method_it != setup->parameter_map.end()) {
+    config.method = std::get<int>(method_it->second);
+  } else {
+    config.method = DEFAULT_METHOD;
+    setup->parameter_map["method"] = config.method;
+  }
 
   WebPPicture picture;
   // Call the internal function directly with version parameter

@@ -220,7 +220,6 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   // Determine which codecs to run
   bool run_all = codec_in_list("all");
   bool run_webp = run_all || codec_in_list("webp");
-  bool run_webp_nonopt = codec_in_list("webp-nonopt");
   bool run_libjpeg_turbo = run_all || codec_in_list("libjpeg-turbo");
   bool run_libjpeg_turbo_nonopt = codec_in_list("libjpeg-turbo-nonopt");
   bool run_jpegli = run_all || codec_in_list("jpegli");
@@ -240,15 +239,18 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
   int errors = 0;
 
   // 1. WebP encoding
-  if (run_webp || run_webp_nonopt) {
+  if (run_webp) {
     CodecOutput local_output;
     local_output.dump_output = dump_output;
     CodecSetup setup;
     setup.num_runs = num_runs;
-    if (run_webp) {
+
+    // Use codec_setup if provided, otherwise use defaults
+    if (codec_setup) {
+      setup = *codec_setup;
+    } else {
+      // Set default optimization
       setup.parameter_map["optimization"] = "opt";
-    } else if (run_webp_nonopt) {
-      setup.parameter_map["optimization"] = "nonopt";
     }
     if (anicet::runner::webp::anicet_run(&input, &setup, &local_output) == 0 &&
         local_output.num_frames() > 0) {
@@ -257,12 +259,30 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
       // Generate filenames and optionally write files
       for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[512];
-        std::string optimization =
-            std::get<std::string>(setup.parameter_map["optimization"]);
-        snprintf(filename, sizeof(filename),
-                 "%s/%s.webp.optimization_%s.index_%zu.webp", dump_output_dir,
-                 dump_output_prefix, optimization.c_str(), i);
+        char filename[1024];
+
+        // Build filename with all parameters
+        std::stringstream ss;
+        ss << dump_output_dir << "/" << dump_output_prefix;
+        ss << ".codec_webp";
+
+        // Convert parameters to string map
+        std::map<std::string, std::string> params =
+            convert_params_to_strings(setup.parameter_map);
+
+        // Convert to vector and sort with custom ordering from descriptors
+        std::vector<std::pair<std::string, std::string>> sorted_params(
+            params.begin(), params.end());
+        std::sort(sorted_params.begin(), sorted_params.end(),
+                  ParamComparator(anicet::runner::webp::WEBP_PARAMETERS));
+
+        for (const auto& [key, value] : sorted_params) {
+          ss << "." << key << "_" << value;
+        }
+
+        ss << ".index_" << i << ".webp";
+
+        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
         local_output.output_files.push_back(filename);
 
         // Write output file if requested

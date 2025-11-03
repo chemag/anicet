@@ -307,8 +307,17 @@ static void print_help_concise(
   printf("Usage: --%s param=value:param=value:...\n", codec_name.c_str());
   printf("   or: --%s param=value --%s param=value ...\n", codec_name.c_str(),
          codec_name.c_str());
-  printf("Example: --%s optimization=opt:preset=ultrafast:qp=30\n",
-         codec_name.c_str());
+
+  // Codec-specific examples
+  if (codec_name == "x265") {
+    printf("Example: --%s optimization=opt:preset=ultrafast:qp=30\n",
+           codec_name.c_str());
+  } else if (codec_name == "webp") {
+    printf("Example: --%s optimization=opt:quality=90:method=6\n",
+           codec_name.c_str());
+  } else {
+    printf("Example: --%s param1=value1:param2=value2\n", codec_name.c_str());
+  }
 }
 
 // Print verbose help
@@ -364,6 +373,17 @@ static void print_help_verbose(
   printf("--%s param=value:param=value:...\n", codec_name.c_str());
   printf("--%s param=value --%s param=value ...\n\n", codec_name.c_str(),
          codec_name.c_str());
+
+  printf("EXAMPLE\n");
+  printf("-------\n");
+  if (codec_name == "x265") {
+    printf("--%s optimization=opt:preset=ultrafast:qp=30\n\n",
+           codec_name.c_str());
+  } else if (codec_name == "webp") {
+    printf("--%s optimization=opt:quality=90:method=6\n\n", codec_name.c_str());
+  } else {
+    printf("--%s param1=value1:param2=value2\n\n", codec_name.c_str());
+  }
 }
 
 // Print parameter help

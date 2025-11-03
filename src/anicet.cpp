@@ -30,6 +30,7 @@
 
 // Codec-specific runners
 #include "anicet_runner_x265.h"
+#include "anicet_runner_webp.h"
 
 // Android MediaCodec library for binder cleanup
 #include "android_mediacodec_lib.h"
@@ -44,7 +45,7 @@
 // Valid codec name(s)
 std::set<std::string> VALID_CODECS = {
   "x265", "svt-av1", "libjpeg-turbo",
-  "libjpeg-turbo-nonopt", "jpegli", "webp", "webp-nonopt",
+  "libjpeg-turbo-nonopt", "jpegli", "webp",
   "mediacodec", "all"
 };
 
@@ -271,6 +272,11 @@ static int get_param_order(
     if (it != anicet::runner::x265::X265_PARAMETERS.end()) {
       return it->second.order;
     }
+  } else if (codec_name == "webp") {
+    auto it = anicet::runner::webp::WEBP_PARAMETERS.find(param_name);
+    if (it != anicet::runner::webp::WEBP_PARAMETERS.end()) {
+      return it->second.order;
+    }
   }
   // Default order for unknown parameters
   return 100;
@@ -339,6 +345,8 @@ struct Options {
   std::string serial_number;
   // x265 parameters from CLI (accumulated from multiple --x265 flags)
   std::vector<std::string> x265_params;
+  // webp parameters from CLI (accumulated from multiple --webp flags)
+  std::vector<std::string> webp_params;
   // parsed codec setup (populated after CLI parsing)
   CodecSetup codec_setup;
 };
@@ -365,10 +373,13 @@ static void print_help(const char* argv0) {
       "  --color-format FORMAT    Color format (e.g., yuv420p)\n"
       "  --codec CODEC            Codec to use: x265, svt-av1,\n"
       "                           libjpeg-turbo, libjpeg-turbo-nonopt, jpegli,\n"
-      "                           webp, webp-nonopt, mediacodec, all (default: all)\n"
+      "                           webp, mediacodec, all (default: all)\n"
       "  --x265 PARAMS            x265 encoder parameters (repeatable, colon/comma-separated)\n"
       "                           Format: param=value:param=value or param=value,param=value\n"
       "                           Use '--x265 help' for parameter list\n"
+      "  --webp PARAMS            webp encoder parameters (repeatable, colon/comma-separated)\n"
+      "                           Format: param=value:param=value or param=value,param=value\n"
+      "                           Use '--webp help' for parameter list\n"
       "  --num-runs N             Number of encoding runs for profiling (default: 1)\n"
       "  --dump-output            Write output files to disk (default: disabled)\n"
       "  --no-dump-output         Do not write output files to disk\n"
@@ -403,6 +414,7 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     {"color-format", required_argument, nullptr, 'f'},
     {"codec", required_argument, nullptr, 'C'},
     {"x265", required_argument, nullptr, 1000},
+    {"webp", required_argument, nullptr, 1001},
     {"num-runs", required_argument, nullptr, 'N'},
     {"dump-output", no_argument, nullptr, 'D'},
     {"no-dump-output", no_argument, nullptr, 'O'},
@@ -569,6 +581,31 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
         break;
       }
 
+      case 1001: {
+        // Handle --webp option
+        std::string arg(optarg);
+
+        // Check for help requests
+        if (arg == "help" || arg == "help -q" || arg == "help -v") {
+          using namespace anicet::parameter;
+          HelpVerbosity verbosity = HelpVerbosity::CONCISE;
+
+          if (arg == "help -q") {
+            verbosity = HelpVerbosity::COMPACT;
+          } else if (arg == "help -v") {
+            verbosity = HelpVerbosity::VERBOSE;
+          }
+
+          print_parameter_help("webp", anicet::runner::webp::WEBP_PARAMETERS,
+                              verbosity);
+          exit(0);
+        }
+
+        // Accumulate parameter string for later parsing
+        opt.webp_params.push_back(arg);
+        break;
+      }
+
       case 'N':
         opt.num_runs = atoi(optarg);
         if (opt.num_runs < 1) {
@@ -631,6 +668,27 @@ static bool parse_cli(int argc, char** argv, Options& opt) {
     // Validate parameter dependencies
     if (!anicet::parameter::validate_parameter_dependencies(
             "x265", anicet::runner::x265::X265_PARAMETERS, opt.codec_setup)) {
+      return false;
+    }
+  }
+
+  // Parse webp parameters if provided (do this BEFORE command validation)
+  if (!opt.webp_params.empty()) {
+    // Initialize codec_setup with default values from descriptors
+    opt.codec_setup.num_runs = opt.num_runs;
+
+    // Parse each parameter string
+    for (const auto& param_str : opt.webp_params) {
+      if (!anicet::parameter::parse_parameter_string(
+              "webp", param_str, anicet::runner::webp::WEBP_PARAMETERS,
+              &opt.codec_setup)) {
+        return false;
+      }
+    }
+
+    // Validate parameter dependencies
+    if (!anicet::parameter::validate_parameter_dependencies(
+            "webp", anicet::runner::webp::WEBP_PARAMETERS, opt.codec_setup)) {
       return false;
     }
   }
@@ -758,7 +816,7 @@ int main(int argc, char** argv) {
         opt.dump_output_prefix.c_str(),
         opt.debug,
         &codec_output,
-        opt.x265_params.empty() ? nullptr : &opt.codec_setup
+        (!opt.x265_params.empty() || !opt.webp_params.empty()) ? &opt.codec_setup : nullptr
     );
 
     // Print simple debug output to stdout if debug level >= 1
