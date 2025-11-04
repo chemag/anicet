@@ -514,10 +514,12 @@ int android_mediacodec_encode_frame(AMediaCodec* codec,
   ResourceDelta encode_delta;
   compute_delta(&encode_start, &encode_end, &encode_delta);
 
-  // Store CPU time for each frame (average since all frames encoded together)
-  double cpu_per_frame_ms = encode_delta.cpu_time_ms / num_runs;
+  // MediaCodec processes frames asynchronously in a pipeline, making per-frame
+  // CPU measurements inaccurate. We only have global CPU time available.
+  // Set per-frame CPU time to 0.0 to indicate unavailable data.
+  // Total CPU time is still available in output->resource_delta.cpu_time_ms
   for (int i = 0; i < num_runs; i++) {
-    output->profile_encode_cpu_ms[i] = cpu_per_frame_ms;
+    output->profile_encode_cpu_ms[i] = 0.0;
   }
 
   // Copy frame buffers to output structure using vectors
