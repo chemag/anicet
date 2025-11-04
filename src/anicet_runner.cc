@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <sstream>
 #include <string>
 
@@ -155,6 +156,100 @@ static void populate_codec_info(CodecOutput& output,
   output.codec_params = convert_params_to_strings(setup.parameter_map);
 }
 
+// Codec configuration structure
+struct CodecConfig {
+  const char* name;      // Display name (e.g., "webp", "jpegli")
+  const char* file_ext;  // File extension (e.g., "webp", "jpeg")
+  std::function<int(const CodecInput*, CodecSetup*, CodecOutput*)> run_func;
+  const std::map<std::string, anicet::parameter::ParameterDescriptor>*
+      param_descriptors;
+  std::map<std::string, std::string> default_params;  // Optional defaults
+};
+
+// Helper function to run a single codec with common logic
+static int run_codec(const CodecInput& input, const CodecConfig& config,
+                     int num_runs, bool dump_output,
+                     const char* dump_output_dir,
+                     const char* dump_output_prefix,
+                     const CodecSetup* codec_setup, CodecOutput* output,
+                     int& errors) {
+  CodecOutput local_output;
+  local_output.dump_output = dump_output;
+  CodecSetup setup;
+  setup.num_runs = num_runs;
+
+  // Use codec_setup if provided, otherwise use defaults
+  if (codec_setup) {
+    setup = *codec_setup;
+  } else {
+    // Set default parameters from config
+    for (const auto& [key, value] : config.default_params) {
+      setup.parameter_map[key] = value;
+    }
+  }
+
+  if (config.run_func(&input, &setup, &local_output) == 0 &&
+      local_output.num_frames() > 0) {
+    // Store codec name and parameters in output
+    populate_codec_info(local_output, config.name, setup);
+
+    // Generate filenames and optionally write files
+    for (size_t i = 0; i < local_output.num_frames(); i++) {
+      char filename[1024];
+
+      // Build filename with all parameters
+      std::stringstream ss;
+      ss << dump_output_dir << "/" << dump_output_prefix;
+      ss << ".codec_" << config.name;
+
+      // Convert parameters to string map
+      std::map<std::string, std::string> params =
+          convert_params_to_strings(setup.parameter_map);
+
+      // Convert to vector and sort with custom ordering from descriptors
+      std::vector<std::pair<std::string, std::string>> sorted_params(
+          params.begin(), params.end());
+      std::sort(sorted_params.begin(), sorted_params.end(),
+                ParamComparator(*config.param_descriptors));
+
+      for (const auto& [key, value] : sorted_params) {
+        // Replace underscores with hyphens in keys, dots with hyphens in
+        // values
+        std::string formatted_key = key;
+        std::replace(formatted_key.begin(), formatted_key.end(), '_', '-');
+        std::string formatted_value = value;
+        std::replace(formatted_value.begin(), formatted_value.end(), '.', '-');
+        ss << "." << formatted_key << "_" << formatted_value;
+      }
+
+      ss << ".index_" << i << "." << config.file_ext;
+
+      snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
+      local_output.output_files.push_back(filename);
+
+      // Write output file if requested
+      if (dump_output) {
+        FILE* f = fopen(filename, "wb");
+        if (f) {
+          fwrite(local_output.frame_buffers[i].data(), 1,
+                 local_output.frame_sizes[i], f);
+          fclose(f);
+        }
+      }
+    }
+
+    // Append results to output parameter if provided
+    if (output != nullptr) {
+      append_codec_output(output, local_output);
+    }
+    return 0;
+  } else {
+    fprintf(stderr, "%s: Encoding failed\n", config.name);
+    errors++;
+    return -1;
+  }
+}
+
 // Main experiment function - uses all sub-runners
 int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
                       int width, const char* color_format,
@@ -242,433 +337,88 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
 
   int errors = 0;
 
+  // Configure codecs
+  CodecConfig webp_config = {
+      .name = "webp",
+      .file_ext = "webp",
+      .run_func = anicet::runner::webp::anicet_run,
+      .param_descriptors = &anicet::runner::webp::WEBP_PARAMETERS,
+      .default_params = {{"optimization", "opt"}}};
+
+  CodecConfig libjpeg_turbo_config = {
+      .name = "libjpeg-turbo",
+      .file_ext = "jpeg",
+      .run_func = anicet::runner::libjpegturbo::anicet_run,
+      .param_descriptors =
+          &anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS,
+      .default_params = {{"optimization", "opt"}}};
+
+  CodecConfig jpegli_config = {
+      .name = "jpegli",
+      .file_ext = "jpeg",
+      .run_func = anicet::runner::jpegli::anicet_run,
+      .param_descriptors = &anicet::runner::jpegli::JPEGLI_PARAMETERS,
+      .default_params = {}};
+
+  CodecConfig x265_config = {
+      .name = "x265",
+      .file_ext = "265",
+      .run_func = anicet::runner::x265::anicet_run,
+      .param_descriptors = &anicet::runner::x265::X265_PARAMETERS,
+      .default_params = {{"optimization", "opt"},
+                         {"preset", "medium"},
+                         {"tune", "zerolatency"},
+                         {"rate-control", "crf"}}};
+
+  CodecConfig svtav1_config = {
+      .name = "svt-av1",
+      .file_ext = "av1",
+      .run_func = anicet::runner::svtav1::anicet_run,
+      .param_descriptors = &anicet::runner::svtav1::SVTAV1_PARAMETERS,
+      .default_params = {}};
+
+  CodecConfig mediacodec_config = {
+      .name = "mediacodec",
+      .file_ext = "bin",
+      .run_func = anicet::runner::mediacodec::anicet_run,
+      .param_descriptors = &anicet::runner::mediacodec::MEDIACODEC_PARAMETERS,
+      .default_params = {}};
+
   // 1. WebP encoding
   if (run_webp) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-
-    // Use codec_setup if provided, otherwise use defaults
-    if (codec_setup) {
-      setup = *codec_setup;
-    } else {
-      // Set default optimization
-      setup.parameter_map["optimization"] = "opt";
-    }
-    if (anicet::runner::webp::anicet_run(&input, &setup, &local_output) == 0 &&
-        local_output.num_frames() > 0) {
-      // Store codec name and parameters in output
-      populate_codec_info(local_output, "webp", setup);
-
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[1024];
-
-        // Build filename with all parameters
-        std::stringstream ss;
-        ss << dump_output_dir << "/" << dump_output_prefix;
-        ss << ".codec_webp";
-
-        // Convert parameters to string map
-        std::map<std::string, std::string> params =
-            convert_params_to_strings(setup.parameter_map);
-
-        // Convert to vector and sort with custom ordering from descriptors
-        std::vector<std::pair<std::string, std::string>> sorted_params(
-            params.begin(), params.end());
-        std::sort(sorted_params.begin(), sorted_params.end(),
-                  ParamComparator(anicet::runner::webp::WEBP_PARAMETERS));
-
-        for (const auto& [key, value] : sorted_params) {
-          ss << "." << key << "_" << value;
-        }
-
-        ss << ".index_" << i << ".webp";
-
-        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "WebP: Encoding failed\n");
-      errors++;
-    }
+    run_codec(input, webp_config, num_runs, dump_output, dump_output_dir,
+              dump_output_prefix, codec_setup, output, errors);
   }
 
   // 2. libjpeg-turbo encoding
   if (run_libjpeg_turbo) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-
-    // Use codec_setup if provided, otherwise use defaults
-    if (codec_setup) {
-      setup = *codec_setup;
-    } else {
-      // Set default optimization
-      setup.parameter_map["optimization"] = "opt";
-    }
-    if (anicet::runner::libjpegturbo::anicet_run(&input, &setup,
-                                                 &local_output) == 0 &&
-        local_output.num_frames() > 0) {
-      // Store codec name and parameters in output
-      populate_codec_info(local_output, "libjpeg-turbo", setup);
-
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[1024];
-
-        // Build filename with all parameters
-        std::stringstream ss;
-        ss << dump_output_dir << "/" << dump_output_prefix;
-        ss << ".codec_libjpeg-turbo";
-
-        // Convert parameters to string map
-        std::map<std::string, std::string> params =
-            convert_params_to_strings(setup.parameter_map);
-
-        // Convert to vector and sort with custom ordering from descriptors
-        std::vector<std::pair<std::string, std::string>> sorted_params(
-            params.begin(), params.end());
-        std::sort(sorted_params.begin(), sorted_params.end(),
-                  ParamComparator(
-                      anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS));
-
-        for (const auto& [key, value] : sorted_params) {
-          ss << "." << key << "_" << value;
-        }
-
-        ss << ".index_" << i << ".jpeg";
-
-        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "libjpeg-turbo: Encoding failed\n");
-      errors++;
-    }
+    run_codec(input, libjpeg_turbo_config, num_runs, dump_output,
+              dump_output_dir, dump_output_prefix, codec_setup, output, errors);
   }
 
   // 3. jpegli encoding
   if (run_jpegli) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-
-    // Use codec_setup if provided, otherwise use defaults
-    if (codec_setup) {
-      setup = *codec_setup;
-    }
-
-    if (anicet::runner::jpegli::anicet_run(&input, &setup, &local_output) ==
-            0 &&
-        local_output.num_frames() > 0) {
-      // Store codec name and parameters in output
-      populate_codec_info(local_output, "jpegli", setup);
-
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[1024];
-
-        // Build filename with all parameters
-        std::stringstream ss;
-        ss << dump_output_dir << "/" << dump_output_prefix;
-        ss << ".codec_jpegli";
-
-        // Convert parameters to string map
-        std::map<std::string, std::string> params =
-            convert_params_to_strings(setup.parameter_map);
-
-        // Convert to vector and sort with custom ordering from descriptors
-        std::vector<std::pair<std::string, std::string>> sorted_params(
-            params.begin(), params.end());
-        std::sort(sorted_params.begin(), sorted_params.end(),
-                  ParamComparator(anicet::runner::jpegli::JPEGLI_PARAMETERS));
-
-        for (const auto& [key, value] : sorted_params) {
-          // Replace underscores with hyphens for consistency
-          std::string formatted_key = key;
-          std::replace(formatted_key.begin(), formatted_key.end(), '_', '-');
-          ss << "." << formatted_key << "_" << value;
-        }
-
-        ss << ".index_" << i << ".jpeg";
-
-        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "jpegli: Encoding failed\n");
-      errors++;
-    }
+    run_codec(input, jpegli_config, num_runs, dump_output, dump_output_dir,
+              dump_output_prefix, codec_setup, output, errors);
   }
 
   // 4. x265 (H.265/HEVC) 8-bit encoding
   if (run_x265) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-
-    // Use provided setup or create default one
-    CodecSetup setup;
-    if (codec_setup != nullptr) {
-      // Use the provided setup
-      setup = *codec_setup;
-      // Override num_runs if not already set
-      if (setup.num_runs == 0) {
-        setup.num_runs = num_runs;
-      }
-      // Ensure "optimization" is always set (needed for filename generation)
-      if (setup.parameter_map.find("optimization") ==
-          setup.parameter_map.end()) {
-        setup.parameter_map["optimization"] = "opt";  // default
-      }
-    } else {
-      // Create default setup
-      setup.num_runs = num_runs;
-      setup.parameter_map["optimization"] = "opt";
-      setup.parameter_map["preset"] = "medium";
-      setup.parameter_map["tune"] = "zerolatency";
-      setup.parameter_map["rate-control"] = "crf";
-    }
-
-    if (anicet::runner::x265::anicet_run(&input, &setup, &local_output) == 0 &&
-        local_output.num_frames() > 0) {
-      // Store codec name and parameters in output
-      populate_codec_info(local_output, "x265", setup);
-
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[1024];
-
-        // Build filename with all parameters using the shared helper
-        std::stringstream ss;
-        ss << dump_output_dir << "/" << dump_output_prefix;
-        ss << ".codec_x265";
-
-        // Convert parameters to string map
-        std::map<std::string, std::string> params =
-            convert_params_to_strings(setup.parameter_map);
-
-        // Convert to vector and sort with custom ordering from descriptors
-        std::vector<std::pair<std::string, std::string>> sorted_params(
-            params.begin(), params.end());
-        std::sort(sorted_params.begin(), sorted_params.end(),
-                  ParamComparator(anicet::runner::x265::X265_PARAMETERS));
-
-        for (const auto& [key, value] : sorted_params) {
-          ss << "." << key << "_" << value;
-        }
-
-        ss << ".index_" << i << ".265";
-
-        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "x265: Encoding failed\n");
-      errors++;
-    }
+    run_codec(input, x265_config, num_runs, dump_output, dump_output_dir,
+              dump_output_prefix, codec_setup, output, errors);
   }
 
   // 5. SVT-AV1 encoding
   if (run_svtav1) {
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-
-    // Use codec_setup if provided, otherwise use defaults
-    if (codec_setup) {
-      setup = *codec_setup;
-    }
-
-    if (anicet::runner::svtav1::anicet_run(&input, &setup, &local_output) ==
-            0 &&
-        local_output.num_frames() > 0) {
-      // Store codec name and parameters in output
-      populate_codec_info(local_output, "svt-av1", setup);
-
-      // Generate filenames and optionally write files
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[1024];
-
-        // Build filename with all parameters
-        std::stringstream ss;
-        ss << dump_output_dir << "/" << dump_output_prefix;
-        ss << ".codec_svt-av1";
-
-        // Convert parameters to string map
-        std::map<std::string, std::string> params =
-            convert_params_to_strings(setup.parameter_map);
-
-        // Convert to vector and sort with custom ordering from descriptors
-        std::vector<std::pair<std::string, std::string>> sorted_params(
-            params.begin(), params.end());
-        std::sort(sorted_params.begin(), sorted_params.end(),
-                  ParamComparator(anicet::runner::svtav1::SVTAV1_PARAMETERS));
-
-        for (const auto& [key, value] : sorted_params) {
-          ss << "." << key << "_" << value;
-        }
-
-        ss << ".index_" << i << ".av1";
-
-        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "SVT-AV1: Encoding failed\n");
-      errors++;
-    }
+    run_codec(input, svtav1_config, num_runs, dump_output, dump_output_dir,
+              dump_output_prefix, codec_setup, output, errors);
   }
 
   // 6. Android MediaCodec encoding (only on Android)
   if (run_mediacodec) {
 #ifdef __ANDROID__
-    CodecOutput local_output;
-    local_output.dump_output = dump_output;
-    CodecSetup setup;
-    setup.num_runs = num_runs;
-
-    // Use codec_setup if provided, otherwise use defaults
-    if (codec_setup) {
-      setup = *codec_setup;
-    }
-
-    if (anicet::runner::mediacodec::anicet_run(&input, &setup, &local_output) ==
-            0 &&
-        local_output.num_frames() > 0) {
-      // Store codec name and parameters in output
-      populate_codec_info(local_output, "mediacodec", setup);
-
-      // Generate filenames with all parameters
-      for (size_t i = 0; i < local_output.num_frames(); i++) {
-        char filename[1024];
-
-        // Build filename with all parameters
-        std::stringstream ss;
-        ss << dump_output_dir << "/" << dump_output_prefix;
-        ss << ".codec_mediacodec";
-
-        // Convert parameters to string map
-        std::map<std::string, std::string> params =
-            convert_params_to_strings(setup.parameter_map);
-
-        // Convert to vector and sort with custom ordering from descriptors
-        std::vector<std::pair<std::string, std::string>> sorted_params(
-            params.begin(), params.end());
-        std::sort(
-            sorted_params.begin(), sorted_params.end(),
-            ParamComparator(anicet::runner::mediacodec::MEDIACODEC_PARAMETERS));
-
-        for (const auto& [key, value] : sorted_params) {
-          // Replace underscores with hyphens for consistency
-          std::string formatted_key = key;
-          std::replace(formatted_key.begin(), formatted_key.end(), '_', '-');
-          ss << "." << formatted_key << "_" << value;
-        }
-
-        ss << ".index_" << i << ".bin";
-
-        snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
-        local_output.output_files.push_back(filename);
-
-        // Write output file if requested
-        if (dump_output) {
-          FILE* f = fopen(filename, "wb");
-          if (f) {
-            fwrite(local_output.frame_buffers[i].data(), 1,
-                   local_output.frame_sizes[i], f);
-            fclose(f);
-          }
-        }
-      }
-
-      // Append results to output parameter if provided
-      if (output != nullptr) {
-        append_codec_output(output, local_output);
-      }
-    } else {
-      fprintf(stderr, "MediaCodec: Encoding failed\n");
-      errors++;
-    }
+    run_codec(input, mediacodec_config, num_runs, dump_output, dump_output_dir,
+              dump_output_prefix, codec_setup, output, errors);
 #else
 #endif
   }
