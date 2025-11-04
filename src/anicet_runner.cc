@@ -164,6 +164,8 @@ struct CodecConfig {
   const std::map<std::string, anicet::parameter::ParameterDescriptor>*
       param_descriptors;
   std::map<std::string, std::string> default_params;  // Optional defaults
+  // Optional function to dynamically determine file extension from parameters
+  std::function<std::string(const CodecSetup*)> get_extension;
 };
 
 // Helper function to run a single codec with common logic
@@ -222,7 +224,13 @@ static int run_codec(const CodecInput& input, const CodecConfig& config,
         ss << "." << formatted_key << "_" << formatted_value;
       }
 
-      ss << ".index_" << i << "." << config.file_ext;
+      // Determine file extension (use dynamic function if provided)
+      std::string file_ext = config.file_ext;
+      if (config.get_extension) {
+        file_ext = config.get_extension(&setup);
+      }
+
+      ss << ".index_" << i << "." << file_ext;
 
       snprintf(filename, sizeof(filename), "%s", ss.str().c_str());
       local_output.output_files.push_back(filename);
@@ -343,7 +351,8 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       .file_ext = "webp",
       .run_func = anicet::runner::webp::anicet_run,
       .param_descriptors = &anicet::runner::webp::WEBP_PARAMETERS,
-      .default_params = {{"optimization", "opt"}}};
+      .default_params = {{"optimization", "opt"}},
+      .get_extension = nullptr};
 
   CodecConfig libjpeg_turbo_config = {
       .name = "libjpeg-turbo",
@@ -351,14 +360,16 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       .run_func = anicet::runner::libjpegturbo::anicet_run,
       .param_descriptors =
           &anicet::runner::libjpegturbo::LIBJPEGTURBO_PARAMETERS,
-      .default_params = {{"optimization", "opt"}}};
+      .default_params = {{"optimization", "opt"}},
+      .get_extension = nullptr};
 
   CodecConfig jpegli_config = {
       .name = "jpegli",
       .file_ext = "jpeg",
       .run_func = anicet::runner::jpegli::anicet_run,
       .param_descriptors = &anicet::runner::jpegli::JPEGLI_PARAMETERS,
-      .default_params = {}};
+      .default_params = {},
+      .get_extension = nullptr};
 
   CodecConfig x265_config = {
       .name = "x265",
@@ -368,21 +379,33 @@ int anicet_experiment(const uint8_t* buffer, size_t buf_size, int height,
       .default_params = {{"optimization", "opt"},
                          {"preset", "medium"},
                          {"tune", "zerolatency"},
-                         {"rate-control", "crf"}}};
+                         {"rate-control", "crf"}},
+      .get_extension = nullptr};
 
   CodecConfig svtav1_config = {
       .name = "svt-av1",
       .file_ext = "av1",
       .run_func = anicet::runner::svtav1::anicet_run,
       .param_descriptors = &anicet::runner::svtav1::SVTAV1_PARAMETERS,
-      .default_params = {}};
+      .default_params = {},
+      .get_extension = nullptr};
 
   CodecConfig mediacodec_config = {
       .name = "mediacodec",
-      .file_ext = "bin",
+      .file_ext = "bin",  // Default fallback
       .run_func = anicet::runner::mediacodec::anicet_run,
       .param_descriptors = &anicet::runner::mediacodec::MEDIACODEC_PARAMETERS,
-      .default_params = {}};
+      .default_params = {},
+      .get_extension = [](const CodecSetup* setup) -> std::string {
+        // Extract codec_name from parameter_map
+        auto it = setup->parameter_map.find("codec_name");
+        if (it != setup->parameter_map.end() &&
+            std::holds_alternative<std::string>(it->second)) {
+          std::string codec_name = std::get<std::string>(it->second);
+          return anicet::runner::mediacodec::get_codec_extension(codec_name);
+        }
+        return "bin";  // Fallback
+      }};
 
   // 1. WebP encoding
   if (run_webp) {

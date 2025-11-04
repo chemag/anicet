@@ -616,19 +616,31 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
   return result;
 }
 
-// List available encoder codec names
-std::vector<std::string> android_mediacodec_list_encoders(bool image_only) {
-  std::vector<std::string> encoders;
+// List available encoder codec names with their media types
+std::map<std::string, std::string> android_mediacodec_list_encoders(
+    bool image_only) {
+  std::map<std::string, std::string> encoders;
 
   // Run dumpsys media.player to get codec list
   FILE* pipe = popen("/system/bin/dumpsys media.player 2>/dev/null", "r");
   if (!pipe) {
-    return encoders;  // Return empty vector on error
+    return encoders;  // Return empty map on error
   }
 
   char buffer[1024];
+  std::string current_media_type;
+
   while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
     std::string line(buffer);
+
+    // Look for media type lines: "Media type 'video/av01':"
+    if (line.find("Media type '") != std::string::npos) {
+      size_t start = line.find("'");
+      size_t end = line.find("'", start + 1);
+      if (start != std::string::npos && end != std::string::npos) {
+        current_media_type = line.substr(start + 1, end - start - 1);
+      }
+    }
 
     // Look for encoder lines: '  Encoder "codec.name" supports'
     if (line.find("Encoder \"") != std::string::npos) {
@@ -637,19 +649,19 @@ std::vector<std::string> android_mediacodec_list_encoders(bool image_only) {
       if (start != std::string::npos && end != std::string::npos) {
         std::string codec_name = line.substr(start + 1, end - start - 1);
 
-        // Filter for image codecs if requested
+        // Filter for image/video codecs if requested
         if (image_only) {
-          // Include HEVC, HEIC, AVC, H264, VP9, AV1 codecs
+          // Include video codecs: HEVC, HEIC, AVC, H264, VP9, AV1
           if (codec_name.find("hevc") != std::string::npos ||
               codec_name.find("heic") != std::string::npos ||
               codec_name.find("avc") != std::string::npos ||
               codec_name.find("h264") != std::string::npos ||
               codec_name.find("vp9") != std::string::npos ||
               codec_name.find("av1") != std::string::npos) {
-            encoders.push_back(codec_name);
+            encoders[codec_name] = current_media_type;
           }
         } else {
-          encoders.push_back(codec_name);
+          encoders[codec_name] = current_media_type;
         }
       }
     }
@@ -725,11 +737,12 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
   return 1;
 }
 
-// List available encoder codec names (non-Android stub)
-std::vector<std::string> android_mediacodec_list_encoders(bool image_only) {
+// List available encoder codec names with their media types (non-Android stub)
+std::map<std::string, std::string> android_mediacodec_list_encoders(
+    bool image_only) {
   (void)image_only;
-  // Return empty vector on non-Android platforms
-  return std::vector<std::string>();
+  // Return empty map on non-Android platforms
+  return std::map<std::string, std::string>();
 }
 
 #endif  // __ANDROID__

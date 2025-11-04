@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
+#include <map>
 #include <string>
 #include <vector>
 #endif
@@ -164,15 +165,17 @@ int android_mediacodec_encode_frame_full(const uint8_t* input_buffer,
 
 // C++ only functions (after extern "C" block)
 
-// Get list of available encoder codec names
+// Get list of available encoder codec names with their media types
 //
 // Parameters:
 //   image_only: If true, only return image/video codecs (HEVC, AVC, VP9, AV1)
 //
 // Returns:
-//   std::vector<std::string> containing available encoder codec names
-//   Empty vector if no encoders found or on error
-std::vector<std::string> android_mediacodec_list_encoders(bool image_only);
+//   std::map<std::string, std::string> mapping codec names to media types
+//   Example: {"c2.google.av1.encoder": "video/av01"}
+//   Empty map if no encoders found or on error
+std::map<std::string, std::string> android_mediacodec_list_encoders(
+    bool image_only);
 
 #endif
 

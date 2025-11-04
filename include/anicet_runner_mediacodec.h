@@ -81,6 +81,10 @@ const std::map<std::string, anicet::parameter::ParameterDescriptor>
 std::map<std::string, anicet::parameter::ParameterDescriptor>
 get_mediacodec_parameters();
 
+// Get file extension for a codec name based on its media type
+// Returns proper extension (e.g., "av1", "264", "265") or "bin" as fallback
+std::string get_codec_extension(const std::string& codec_name);
+
 // Android MediaCodec encoder (Android only)
 // Expects parameters in setup->parameter_map: codec_name, quality, bitrate,
 // bitrate_mode

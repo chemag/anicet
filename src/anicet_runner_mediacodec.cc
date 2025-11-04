@@ -19,6 +19,36 @@ static int g_debug_level __attribute__((unused)) = 0;
 // Use unified DEBUG macro from anicet_common.h
 #define DEBUG(level, ...) ANICET_DEBUG(g_debug_level, level, __VA_ARGS__)
 
+// Map media types to file extensions
+static const std::map<std::string, std::string> MEDIA_TYPE_EXTENSIONS = {
+    {"video/apv", "apv"},           {"video/av01", "av1"},
+    {"video/avc", "264"},           {"video/hevc", "265"},
+    {"video/mp4v-es", "mp4v"},      {"video/x-vnd.on2.vp8", "vp8"},
+    {"video/x-vnd.on2.vp9", "vp9"},
+};
+
+// Get file extension for a codec name by looking up its media type
+std::string get_codec_extension(const std::string& codec_name) {
+#ifdef __ANDROID__
+  // Query device for codec's media type
+  std::map<std::string, std::string> encoders =
+      android_mediacodec_list_encoders(false);  // all codecs
+
+  auto it = encoders.find(codec_name);
+  if (it != encoders.end()) {
+    const std::string& media_type = it->second;
+    auto ext_it = MEDIA_TYPE_EXTENSIONS.find(media_type);
+    if (ext_it != MEDIA_TYPE_EXTENSIONS.end()) {
+      return ext_it->second;
+    }
+  }
+#else
+  (void)codec_name;
+#endif
+  // Default extension if media type not found
+  return "bin";
+}
+
 // Get MediaCodec parameter descriptors with dynamically populated codec list
 std::map<std::string, anicet::parameter::ParameterDescriptor>
 get_mediacodec_parameters() {
@@ -27,14 +57,17 @@ get_mediacodec_parameters() {
       MEDIACODEC_PARAMETERS;
 
 #ifdef __ANDROID__
-  // Query device for available encoders
-  std::vector<std::string> encoders =
+  // Query device for available encoders (returns map: codec_name -> media_type)
+  std::map<std::string, std::string> encoders =
       android_mediacodec_list_encoders(true);  // image_only=true
 
   // Populate codec_name valid_values with available codecs
   if (!encoders.empty()) {
-    // Convert vector to list for ParameterDescriptor
-    std::list<std::string> codec_list(encoders.begin(), encoders.end());
+    // Extract just the codec names for valid_values
+    std::list<std::string> codec_list;
+    for (const auto& [codec_name, media_type] : encoders) {
+      codec_list.push_back(codec_name);
+    }
     params["codec_name"].valid_values = codec_list;
   }
 #endif

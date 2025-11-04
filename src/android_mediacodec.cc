@@ -212,8 +212,8 @@ static bool parse_args(int argc, char** argv, Options& opt) {
 
 // Codec listing using dumpsys media.player
 static int list_codecs_cmd(const Options& opt) {
-  // Use library function to get encoder list
-  std::vector<std::string> encoders =
+  // Use library function to get encoder list (map: codec_name -> media_type)
+  std::map<std::string, std::string> encoders =
       android_mediacodec_list_encoders(opt.list_image_codecs);
 
   if (encoders.empty()) {
@@ -226,8 +226,8 @@ static int list_codecs_cmd(const Options& opt) {
          opt.list_image_codecs ? "image/video " : "");
   printf("======================\n\n");
 
-  for (const auto& enc : encoders) {
-    printf("  %s\n", enc.c_str());
+  for (const auto& [codec_name, media_type] : encoders) {
+    printf("  %-40s %s\n", codec_name.c_str(), media_type.c_str());
   }
 
   printf("\n");
