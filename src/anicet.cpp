@@ -54,12 +54,6 @@ std::set<std::string> VALID_CODECS = {
 };
 
 // small utilities
-static long now_ms_monotonic() {
-  struct timespec ts{};
-  clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-  return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
-}
-
 // Get directory of the executable
 static std::string get_executable_dir() {
   char path[4096];
@@ -1029,7 +1023,7 @@ int main(int argc, char** argv) {
 
   install_signal_handlers();
 
-  long t0_ms = now_ms_monotonic();
+  int64_t t0_us = anicet_get_timestamp();
 
   // Check if we're in library API mode (media parameters provided)
   bool library_mode = !opt.image_file.empty() && opt.width > 0 &&
@@ -1349,8 +1343,8 @@ int main(int argc, char** argv) {
     if (errno == EINTR) {
       // Check for timeout via elapsed time if setitimer is not desired
       if (opt.timeout_ms > 0) {
-        long now = now_ms_monotonic();
-        if (now - t0_ms > opt.timeout_ms) {
+        int64_t now_us = anicet_get_timestamp();
+        if ((now_us - t0_us) / 1000 > opt.timeout_ms) {
           timed_out = true;
           kill(pid, SIGKILL);
         }
@@ -1380,9 +1374,9 @@ int main(int argc, char** argv) {
     perror("wait4");
     return 2;
   }
-  long t1_ms = now_ms_monotonic();
+  int64_t t1_us = anicet_get_timestamp();
 
-  long wall_ms = t1_ms - t0_ms;
+  long wall_ms = (t1_us - t0_us) / 1000;
   long user_ms = ru.ru_utime.tv_sec * 1000L + ru.ru_utime.tv_usec / 1000L;
   long sys_ms = ru.ru_stime.tv_sec * 1000L + ru.ru_stime.tv_usec / 1000L;
 
